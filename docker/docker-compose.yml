@@ -1,0 +1,102 @@
+version: "3"
+services:
+  mainchain-validator-devnet-1:
+    hostname: mainchain-validator-devnet-1
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: bd7eb7a46f5d4e6d1abb2b3e1c4694fd71e48cc2537f0191b0ec208d31f56af0
+        password: pass
+    container_name: mainchain-validator-devnet-1
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-1" --password /root/.accountpassword --networkid 50009 --port 30401 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b" --unlock "0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev1.txt" --nodiscover
+    ports:
+      - 30401:30401/tcp
+    expose:
+      - 30401
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.2
+
+  mainchain-validator-devnet-2:
+    hostname: mainchain-validator-devnet-2
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: e043e952a0d20a7160bf3a0f6eaa964102fbca2ebd280bdfe7c776080b350a11
+        password: pass
+    container_name: mainchain-validator-devnet-2
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-2" --password /root/.accountpassword --networkid 50009 --port 30402 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7" --unlock "0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev2.txt" --nodiscover
+    ports:
+      - 30402:30402/tcp
+    expose:
+      - 30402
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.3
+
+  mainchain-validator-devnet-3:
+    hostname: mainchain-validator-devnet-3
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 88fc096c92d58b2ab5e0470da6416c5b02ac5bf065a1ec3106b24cdc0ba7f88b
+        password: pass
+    container_name: mainchain-validator-devnet-3
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-3" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xcA29F1275470DE81DE6E1Bb53a55228Da676E752" --unlock "0xcA29F1275470DE81DE6E1Bb53a55228Da676E752" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev3.txt" --nodiscover
+    ports:
+      - 30403:30403/tcp
+    expose:
+      - 30403
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.4
+
+  mainchain-validator-devnet-4:
+    hostname: mainchain-validator-devnet-4
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 4b33c4e4f549ebda9a384f45c02afdd741207e08ea4b2db110706bfd31679f9c
+        password: pass
+    container_name: mainchain-validator-devnet-4
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-4" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xd71aD3263666e03004479B30CA840a26eaC5b763" --unlock "0xd71aD3263666e03004479B30CA840a26eaC5b763" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev4.txt" --nodiscover
+    ports:
+      - 30404:30404/tcp
+    expose:
+      - 30404
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.5
+
+  mainchain-rpc-devnet:
+    hostname: mainchain-rpc-devnet
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 529664fd320b494e09eff12bcfd41f63b4776ac02ca05f34ae636d451a005ddf
+        password: pass
+    container_name: mainchain-rpc-devnet
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-rpc-devnet" --networkid 50009 --port 30404 --rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 --rpcport 8101 --rpcvhosts "*" --ws --wsaddr 0.0.0.0 --wsport 8111 --wsorigins "*" --syncmode="full" --nodiscover
+    ports:
+      - 30405:30405/tcp
+      - 8101:8101/tcp
+      - 8111:8111/tcp
+    expose:
+      - 30405
+      - 8101
+      - 8111
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.6
+
+networks:
+  mainchain_devnet:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/24

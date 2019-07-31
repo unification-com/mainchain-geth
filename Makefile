@@ -143,3 +143,24 @@ geth-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=windows/amd64 -v ./cmd/geth
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
+
+devnet:
+	docker-compose -f docker/docker-compose-mount.yml down --remove-orphans
+	docker-compose -f docker/docker-compose-mount.yml up --build
+
+devnet-down:
+	docker-compose -f docker/docker-compose-mount.yml down --remove-orphans
+
+devnet-pristine:
+	docker-compose -f docker/docker-compose.yml down --remove-orphans
+	docker-compose -f docker/docker-compose.yml up --build
+
+devnet-pristine-down:
+	docker-compose -f docker/docker-compose.yml down
+
+devnet-syphoned-mount:
+	docker-compose -f docker/docker-compose-syphoned-mount.yml down --remove-orphans
+	docker-compose -f docker/docker-compose-syphoned-mount.yml up --build
+
+devnet-syphoned-mount-down:
+	docker-compose -f docker/docker-compose-syphoned-mount.yml down --remove-orphans

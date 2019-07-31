@@ -1,0 +1,179 @@
+version: "3"
+services:
+  mainchain-validator-devnet-1:
+    hostname: mainchain-validator-devnet-1
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: bd7eb7a46f5d4e6d1abb2b3e1c4694fd71e48cc2537f0191b0ec208d31f56af0
+        password: pass
+    container_name: mainchain-validator-devnet-1
+    security_opt:
+      - seccomp:unconfined # required if running through delve, i.e. DEBUGGER == true
+    command: /bin/bash -c '/root/bootstrap.sh;'
+    ports:
+      - 30401:30401/tcp
+      - 40000:40000
+    expose:
+      - 30401
+      - 40000
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.2
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=true
+      - DLV_PORT=40000
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-1
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30401
+      - UNLOCK_ADDRESS=0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b
+      - NODE_KEY=ev1.txt
+      - LOG_LEVEL=9
+
+  mainchain-validator-devnet-2:
+    hostname: mainchain-validator-devnet-2
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: e043e952a0d20a7160bf3a0f6eaa964102fbca2ebd280bdfe7c776080b350a11
+        password: pass
+    container_name: mainchain-validator-devnet-2
+    command: /bin/bash -c '/root/bootstrap.sh;'
+    ports:
+      - 30402:30402/tcp
+      - 40001:40001
+    expose:
+      - 30402
+      - 40001
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.3
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40001
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-2
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30402
+      - UNLOCK_ADDRESS=0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7
+      - NODE_KEY=ev2.txt
+      - LOG_LEVEL=4
+
+  mainchain-validator-devnet-3:
+    hostname: mainchain-validator-devnet-3
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 88fc096c92d58b2ab5e0470da6416c5b02ac5bf065a1ec3106b24cdc0ba7f88b
+        password: pass
+    container_name: mainchain-validator-devnet-3
+    command: /bin/bash -c '/root/bootstrap.sh;'
+    ports:
+      - 30403:30403/tcp
+      - 40002:40002
+    expose:
+      - 30403
+      - 40002
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.4
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40002
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-3
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30403
+      - UNLOCK_ADDRESS=0xcA29F1275470DE81DE6E1Bb53a55228Da676E752
+      - NODE_KEY=ev3.txt
+      - LOG_LEVEL=4
+
+  mainchain-validator-devnet-4:
+    hostname: mainchain-validator-devnet-4
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 4b33c4e4f549ebda9a384f45c02afdd741207e08ea4b2db110706bfd31679f9c
+        password: pass
+    container_name: mainchain-validator-devnet-4
+    command: /bin/bash -c '/root/bootstrap.sh;'
+    ports:
+      - 30404:30404/tcp
+      - 40003:40003
+    expose:
+      - 30404
+      - 40003
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.5
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40003
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-4
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30404
+      - UNLOCK_ADDRESS=0xd71aD3263666e03004479B30CA840a26eaC5b763
+      - NODE_KEY=ev4.txt
+      - LOG_LEVEL=4
+
+  mainchain-rpc-devnet:
+    hostname: mainchain-rpc-devnet
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 529664fd320b494e09eff12bcfd41f63b4776ac02ca05f34ae636d451a005ddf
+        password: pass
+    container_name: mainchain-rpc-devnet
+    command: /bin/bash -c '/root/bootstrap.sh;'
+    ports:
+      - 30405:30405/tcp
+      - 8101:8101/tcp
+      - 8111:8111/tcp
+      - 40004:40004
+    expose:
+      - 30405
+      - 8101
+      - 8111
+      - 40004
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.6
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40004
+      - NODE_TYPE=rpc
+      - IDENTITY=mainchain-rpc-devnet
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30405
+      - UNLOCK_ADDRESS=
+      - NODE_KEY=
+      - LOG_LEVEL=4
+
+networks:
+  mainchain_devnet:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/24

@@ -1,0 +1,101 @@
+version: "3"
+services:
+  ev-2:
+    hostname: ev-2
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: e043e952a0d20a7160bf3a0f6eaa964102fbca2ebd280bdfe7c776080b350a11
+        password: pass
+    container_name: ev-2
+    command: /bin/bash -c '/root/bootstrap-sans-delve.sh;'
+    ports:
+      - 30402:30402/tcp
+    expose:
+      - 30402
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.3
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40001
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-2
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30402
+      - UNLOCK_ADDRESS=0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7
+      - NODE_KEY=ev2.txt
+      - LOG_LEVEL=4
+
+  ev-3:
+    hostname: ev-3
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 88fc096c92d58b2ab5e0470da6416c5b02ac5bf065a1ec3106b24cdc0ba7f88b
+        password: pass
+    container_name: ev-3
+    command: /bin/bash -c '/root/bootstrap-sans-delve.sh;'
+    ports:
+      - 30403:30403/tcp
+    expose:
+      - 30403
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.4
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40002
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-3
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30403
+      - UNLOCK_ADDRESS=0xcA29F1275470DE81DE6E1Bb53a55228Da676E752
+      - NODE_KEY=ev3.txt
+      - LOG_LEVEL=4
+
+  ev-4:
+    hostname: ev-4
+    build:
+      context: ../
+      dockerfile: ./docker/validator/Dockerfile
+      args:
+        privatekey: 4b33c4e4f549ebda9a384f45c02afdd741207e08ea4b2db110706bfd31679f9c
+        password: pass
+    container_name: ev-4
+    command: /bin/bash -c '/root/bootstrap-sans-delve.sh;'
+    ports:
+      - 30404:30404/tcp
+    expose:
+      - 30404
+    networks:
+      mainchain_devnet:
+        ipv4_address: 172.25.0.5
+    volumes:
+      - ${GOPATH}/src:/root/.go/src
+    environment:
+      - GOPATH=/root/.go
+      - DEBUGGER=false
+      - DLV_PORT=40002
+      - NODE_TYPE=validator
+      - IDENTITY=mainchain-validator-devnet-4
+      - NETWORK_ID=50009
+      - LISTEN_PORT=30404
+      - UNLOCK_ADDRESS=0xd71aD3263666e03004479B30CA840a26eaC5b763
+      - NODE_KEY=ev4.txt
+      - LOG_LEVEL=4
+
+networks:
+  mainchain_devnet:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.0.0/24
