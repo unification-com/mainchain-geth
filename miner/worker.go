@@ -27,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/consensus"
+	"github.com/unification-com/mainchain/consensus/dsg"
 	"github.com/unification-com/mainchain/consensus/misc"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/core/state"
@@ -532,6 +533,14 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Lock()
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
+
+			statedb, _ := w.chain.State()
+			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
+			if !v {
+				log.Info("The author may not produce this block")
+				continue
+			}
+			log.Info("⭐ The author may produce this block")
 
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
