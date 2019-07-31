@@ -103,6 +103,27 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// Vanilla Geth style hash - used by wrkoracle for geth based WRKChains
+func (h *Header) GoEthereumHash() common.Hash {
+	return rlpHash([]interface{}{
+		h.ParentHash,
+		h.UncleHash,
+		h.Coinbase,
+		h.Root,
+		h.TxHash,
+		h.ReceiptHash,
+		h.Bloom,
+		h.Difficulty,
+		h.Number,
+		h.GasLimit,
+		h.GasUsed,
+		h.Time,
+		h.Extra,
+		h.MixDigest,
+		h.Nonce,
+	})
+}
+
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
 
 // Size returns the approximate memory used by all internal contents. It is used
