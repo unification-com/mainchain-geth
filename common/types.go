@@ -36,6 +36,8 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
+	DSG                 = "0x0000000000000000000000000000000000000091"
+
 )
 
 var (
