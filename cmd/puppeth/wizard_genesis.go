@@ -18,8 +18,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/unification-com/mainchain/accounts/abi/bind"
+	"github.com/unification-com/mainchain/accounts/abi/bind/backends"
+	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/rlp"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -30,6 +35,7 @@ import (
 	"time"
 
 	"github.com/unification-com/mainchain/common"
+	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
@@ -132,6 +138,52 @@ func (w *wizard) makeGenesis() {
 	fmt.Println()
 	fmt.Println("Specify your chain/network ID if you want an explicit one (default = random)")
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
+
+	// WRKChainRoot
+	fmt.Println()
+	fmt.Println("What is the required deposit amount for registering a WRKChain? (default 10 UND)")
+	deposit := uint64(w.readDefaultInt(10))
+	depositAmount := new(big.Int).SetUint64(deposit)
+	depositAmount = depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
+
+	fmt.Println()
+	fmt.Println("How many block hashes does a WRKChain need to submit to get deposit refunded? (default 1000)")
+	blocks := uint64(w.readDefaultInt(1000))
+	minBlocks := new(big.Int).SetUint64(blocks)
+
+	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(pKey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	transactOpts := bind.NewKeyedTransactor(pKey)
+
+	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend, depositAmount, minBlocks)
+	if err != nil {
+		fmt.Println("Can't deploy WRKChain Root")
+		fmt.Println(err)
+	}
+	contractBackend.Commit()
+
+	wrkd := time.Now().Add(1000 * time.Millisecond)
+	wrkctx, wrkcancel := context.WithDeadline(context.Background(), wrkd)
+	defer wrkcancel()
+	wrkcode, _ := contractBackend.CodeAt(wrkctx, wrkchainRootAddress, nil)
+	wrkstorage := make(map[common.Hash]common.Hash)
+	storage := make(map[common.Hash]common.Hash)
+	wrkf := func(key, val common.Hash) bool {
+		decode := []byte{}
+		trim := bytes.TrimLeft(val.Bytes(), "\x00")
+		rlp.DecodeBytes(trim, &decode)
+		wrkstorage[key] = common.BytesToHash(decode)
+		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
+		return true
+	}
+	contractBackend.ForEachStorageAt(wrkctx, wrkchainRootAddress, nil, wrkf)
+
+	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
+		Code:    wrkcode,
+		Storage: wrkstorage,
+		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+	}
 
 	// All done, store the genesis and flush to disk
 	log.Info("Configured new genesis block")
