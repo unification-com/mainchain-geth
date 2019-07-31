@@ -55,7 +55,7 @@ func TestWrkchainRootDeploy(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOpts := bind.NewKeyedTransactor(deployerKey)
 
@@ -92,7 +92,7 @@ func TestRegisterWrkchain(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
@@ -135,7 +135,7 @@ func TestRegisterWrkchainWrongDeposit(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
@@ -185,7 +185,7 @@ func TestWritingHashes(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
@@ -238,7 +238,7 @@ func TestOnlyAuthCanWriteHashes(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
@@ -287,7 +287,7 @@ func TestNewAuthCanWrite(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
@@ -345,7 +345,7 @@ func TestDepositRefund(t *testing.T) {
 		},
 	}
 
-	contractBackend := backends.NewSimulatedBackend(genesisAlloc)
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 
 	transactOptsDeployer := bind.NewKeyedTransactor(deployerKey)
 	transactOptsWrkchainOwner := bind.NewKeyedTransactor(wrkchainOwnerKey)
