@@ -18,7 +18,7 @@ $ (cd dashboard/assets && yarn install && yarn flow)
 Normally the dashboard assets are bundled into Geth via `go-bindata` to avoid external dependencies. Rebuilding Geth after each UI modification however is not feasible from a developer perspective. Instead, we can run `yarn dev` to watch for file system changes and refresh the browser automatically.
 
 ```
-$ geth --dashboard --vmodule=dashboard=5
+$ und --dashboard --vmodule=dashboard=5
 $ (cd dashboard/assets && yarn dev)
 ```
 
