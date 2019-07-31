@@ -20,9 +20,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/unification-com/mainchain/internal/ethapi"
+	"github.com/unification-com/mainchain/log"
+	"github.com/unification-com/mainchain/rpc"
 )
 
 type StdIOUI struct {

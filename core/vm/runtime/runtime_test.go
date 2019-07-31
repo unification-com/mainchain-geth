@@ -21,12 +21,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/unification-com/mainchain/accounts/abi"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/core/rawdb"
+	"github.com/unification-com/mainchain/core/state"
+	"github.com/unification-com/mainchain/core/vm"
+	"github.com/unification-com/mainchain/params"
 )
 
 func TestDefaults(t *testing.T) {

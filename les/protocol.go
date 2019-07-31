@@ -23,10 +23,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/p2p/enode"
+	"github.com/unification-com/mainchain/rlp"
 )
 
 // Constants to match up protocol versions and messages

@@ -28,9 +28,9 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/unification-com/mainchain/accounts"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does

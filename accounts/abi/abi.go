@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/unification-com/mainchain/common"
 )
 
 // The ABI holds information about a contract's context and available

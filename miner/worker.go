@@ -25,15 +25,15 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/consensus"
+	"github.com/unification-com/mainchain/consensus/misc"
+	"github.com/unification-com/mainchain/core"
+	"github.com/unification-com/mainchain/core/state"
+	"github.com/unification-com/mainchain/core/types"
+	"github.com/unification-com/mainchain/event"
+	"github.com/unification-com/mainchain/log"
+	"github.com/unification-com/mainchain/params"
 )
 
 const (

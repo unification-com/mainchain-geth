@@ -28,12 +28,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/log"
+	"github.com/unification-com/mainchain/p2p/enode"
+	"github.com/unification-com/mainchain/p2p/enr"
+	"github.com/unification-com/mainchain/p2p/netutil"
+	"github.com/unification-com/mainchain/rlp"
 )
 
 // Errors

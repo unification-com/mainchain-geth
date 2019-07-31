@@ -24,11 +24,11 @@ import (
 	"io/ioutil"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/unification-com/mainchain/accounts"
+	"github.com/unification-com/mainchain/accounts/keystore"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/common/math"
+	"github.com/unification-com/mainchain/crypto"
 )
 
 // SignerUIAPI implements methods Clef provides for a UI to query, in the bidirectional communication

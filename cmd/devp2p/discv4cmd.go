@@ -23,10 +23,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/p2p/discover"
+	"github.com/unification-com/mainchain/p2p/enode"
+	"github.com/unification-com/mainchain/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

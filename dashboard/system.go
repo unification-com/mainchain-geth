@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/elastic/gosigar"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/unification-com/mainchain/metrics"
+	"github.com/unification-com/mainchain/p2p"
 )
 
 // meterCollector returns a function, which retrieves the count of a specific meter.

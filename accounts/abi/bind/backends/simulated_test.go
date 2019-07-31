@@ -21,13 +21,13 @@ import (
 	"math/big"
 	"testing"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+	ethereum "github.com/unification-com/mainchain"
+	"github.com/unification-com/mainchain/accounts/abi/bind"
+	"github.com/unification-com/mainchain/accounts/abi/bind/backends"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/core"
+	"github.com/unification-com/mainchain/core/types"
+	"github.com/unification-com/mainchain/crypto"
 )
 
 func TestSimulatedBackend(t *testing.T) {

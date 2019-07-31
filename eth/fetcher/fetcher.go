@@ -22,11 +22,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/prque"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/common/prque"
+	"github.com/unification-com/mainchain/consensus"
+	"github.com/unification-com/mainchain/core/types"
+	"github.com/unification-com/mainchain/log"
 )
 
 const (
