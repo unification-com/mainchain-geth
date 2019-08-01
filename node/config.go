@@ -52,7 +52,7 @@ const (
 // all registered services.
 type Config struct {
 	// Name sets the instance name of the node. It must not contain the / character and is
-	// used in the devp2p node identifier. The instance name of geth is "geth". If no
+	// used in the devp2p node identifier. The instance name of und is "und". If no
 	// value is specified, the basename of the current executable is used.
 	Name string `toml:"-"`
 
@@ -188,9 +188,9 @@ type Config struct {
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
-	staticNodesWarning     bool
-	trustedNodesWarning    bool
-	oldGethResourceWarning bool
+	staticNodesWarning    bool
+	trustedNodesWarning   bool
+	oldUndResourceWarning bool
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -286,9 +286,9 @@ func (c *Config) ExtRPCEnabled() bool {
 // NodeName returns the devp2p node identifier.
 func (c *Config) NodeName() string {
 	name := c.name()
-	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
-	if name == "geth" || name == "geth-testnet" {
-		name = "Geth"
+	// Backwards compatibility: previous versions used title-cased "Und", keep that.
+	if name == "und" || name == "und-testnet" {
+		name = "Und"
 	}
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
@@ -312,8 +312,8 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for "geth" instances.
-var isOldGethResource = map[string]bool{
+// These resources are resolved differently for "und" instances.
+var isOldUndResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
@@ -331,14 +331,14 @@ func (c *Config) ResolvePath(path string) string {
 	}
 	// Backwards-compatibility: ensure that data directory files created
 	// by geth 1.4 are used if they exist.
-	if warn, isOld := isOldGethResource[path]; isOld {
+	if warn, isOld := isOldUndResource[path]; isOld {
 		oldpath := ""
-		if c.name() == "geth" {
+		if c.name() == "und" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
 			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
+				c.warnOnce(&c.oldUndResourceWarning, "Using deprecated resource file %s, please move this file to the 'und' subdirectory of datadir.", oldpath)
 			}
 			return oldpath
 		}
