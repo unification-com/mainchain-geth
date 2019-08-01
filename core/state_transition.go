@@ -29,6 +29,7 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
+	errInsufficientBalanceForWrkchainTax = errors.New("insufficient balance to pay for wrkchain tax")
 )
 
 /*
@@ -73,6 +74,8 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+
+	IsWrkchainRootMessage() bool
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
@@ -164,6 +167,30 @@ func (st *StateTransition) buyGas() error {
 	return nil
 }
 
+func (st *StateTransition) payTax() error {
+
+	// Todo - check if reg or record Tx
+	tax := params.CalculateNetworkTax(false)
+
+	if st.state.GetBalance(st.msg.From()).Cmp(tax) < 0 {
+		return errInsufficientBalanceForWrkchainTax
+	}
+
+	// Although we're not charging gas for WRKChain Root Txs, we still need to track
+	// how much is used to ensure a block doesn't exceed a standard gas limit for
+	// executing these contract calls.
+	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
+		return err
+	}
+	st.gas += st.msg.Gas()
+	st.initialGas = st.msg.Gas()
+
+	// Subtract the WRKChain tax from the sender account
+	st.state.SubBalance(st.msg.From(), tax)
+
+	return nil
+}
+
 func (st *StateTransition) preCheck() error {
 	// Make sure this transaction's nonce is correct.
 	if st.msg.CheckNonce() {
@@ -173,6 +200,9 @@ func (st *StateTransition) preCheck() error {
 		} else if nonce > st.msg.Nonce() {
 			return ErrNonceTooLow
 		}
+	}
+	if st.msg.IsWrkchainRootMessage() {
+		return st.payTax()
 	}
 	return st.buyGas()
 }
@@ -221,10 +251,34 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 			return nil, 0, false, vmerr
 		}
 	}
-	st.refundGas()
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
+	if msg.IsWrkchainRootMessage() {
+		log.Debug("TransitionDb", "st.msg.To()", st.msg.To().Hex(), "st.msg.From()", st.msg.From().Hex(), "st.evm.Coinbase", st.evm.Coinbase.Hex(), "st.gasUsed()", st.gasUsed(), "st.gasPrice", st.gasPrice, "st.value", st.value)
+		// Pay WRKChain Tax instead of gas fees.
+		// Todo: Check if reg or record
+		st.distributeTax(false)
+	} else {
+		st.refundGas()
+		st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	}
 	return ret, st.gasUsed(), vmerr != nil, err
+}
+
+func (st *StateTransition) distributeTax(isReg bool) {
+	tax := params.CalculateNetworkTax(isReg)
+	// Validator receives the WRKChain Tax
+	log.Debug("distributeTax", "st.evm.Coinbase", st.evm.Coinbase.String(), "tax", tax.String())
+	st.state.AddBalance(st.evm.Coinbase, tax)
+	// Todo - work out what % needs to go to validators
+
+	// Add remaining gas to the block gas counter so it is
+	// available for the next transaction.
+	refund := st.gasUsed() / 2
+	if refund > st.state.GetRefund() {
+		refund = st.state.GetRefund()
+	}
+	st.gas += refund
+	st.gp.AddGas(st.gas)
 }
 
 func (st *StateTransition) refundGas() {
