@@ -1763,3 +1763,71 @@ func benchmarkPoolBatchInsert(b *testing.B, size int) {
 		pool.AddRemotes(batch)
 	}
 }
+
+func wrkChainRootTransaction(key *ecdsa.PrivateKey, nonce uint64, register bool) *types.Transaction {
+	registerData := "0x5be4e228000000000000000000000000000000000000000000000000000000000000c35900000000000000000000000000000000000000000000000000000000000000608bf71a1bf21b1d51b5503b25892f506c72aa5b740ed4702fa3ba9153d60cabde0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000f30f951b0426f8bf37ac71967407081358df7a7b000000000000000000000000e76d1b02c95c11db13f733c07fce5e173b322b2f"
+	recordData := "0xa78c4988000000000000000000000000000000000000000000000000000000000000c3590000000000000000000000000000000000000000000000000000000000000006092f2d5618d9951cac1ce9a19000bbad6fc052917c93359ad12062bd6e1a3c7d3f5c0dfacaff21bd627a399c9042bb899ad62eb4d0d41a50342e679a45b59a3331c5d8c42ec2f17548f625709feee2c42afce92769aa6e0f79e848f305962bb52ee16f78233750cd388fd2563b5edd2179f1466c9d240cad2db1a9651a0f95ec1abdb0ee40562ed07699a598f0f2eaec386ea18e4e0ba5a588e19013e22af70a000000000000000000000000f30f951b0426f8bf37ac71967407081358df7a7b"
+	data := registerData
+	if !register {
+		data = recordData
+	}
+
+	dataBytes := common.FromHex(data)
+
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.HexToAddress(common.WRKChainRoot), big.NewInt(0), 240000, big.NewInt(2500), dataBytes), types.HomesteadSigner{}, key)
+	return tx
+}
+
+// TestWRKChainRootTransactionsInsufficientFunds tests the correct error message
+// is returned for accounts wiht insufficient funds to pay network tax
+func TestWRKChainRootTransactionsInsufficientFunds(t *testing.T) {
+	t.Parallel()
+
+	// Create the pool to test the status retrievals with
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
+
+	pool := NewTxPool(testTxPoolConfig, params.TestChainConfig, blockchain)
+	defer pool.Stop()
+
+	key, _ := crypto.GenerateKey()
+	tx := wrkChainRootTransaction(key, 2, true)
+	from, _ := deriveSender(transaction(0, 0, key))
+	pool.currentState.SetBalance(from, big.NewInt(0))
+	if err := pool.AddRemote(tx); err != ErrInsufficientFundsForWRKChainTax {
+		t.Error("expected", ErrInsufficientFundsForWRKChainTax, "got", err)
+	}
+
+	tx = wrkChainRootTransaction(key, 3, false)
+	pool.currentState.SetBalance(from, big.NewInt(0))
+	if err := pool.AddRemote(tx); err != ErrInsufficientFundsForWRKChainTax {
+		t.Error("expected", ErrInsufficientFundsForWRKChainTax, "got", err)
+	}
+}
+
+// TestValidWrkChainRootTransactions runs some simple tests to ensure
+// valid WRKChain root Txs are added to the tx pool
+func TestValidWrkChainRootTransactions(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := wrkChainRootTransaction(key, 2, true)
+	from, _ := deriveSender(tx)
+
+	pool.currentState.SetNonce(from, 1)
+
+	startBalance := big.NewInt(10000)
+	startBalance.Mul(startBalance, big.NewInt(params.Ether))
+
+	pool.currentState.AddBalance(from, startBalance)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+
+	tx = wrkChainRootTransaction(key, 3, false)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+}

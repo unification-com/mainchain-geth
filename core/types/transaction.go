@@ -19,6 +19,7 @@ package types
 import (
 	"container/heap"
 	"errors"
+	"github.com/unification-com/mainchain/params"
 	"io"
 	"math/big"
 	"sync/atomic"
@@ -123,6 +124,36 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
+func (tx *Transaction) IsWrkchainRootTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+
+	return tx.To().String() == common.WRKChainRoot
+}
+
+func (tx *Transaction) IsRegisterWRKChainTransaction() bool {
+	if !tx.IsWrkchainRootTransaction() {
+		return false
+	}
+	callMethod := tx.WRKChainRootMethod()
+	if callMethod == nil {
+		return false
+	}
+	return false
+}
+
+func (tx *Transaction) IsRecordWRKChainTransaction() bool {
+	if !tx.IsWrkchainRootTransaction() {
+		return false
+	}
+	callMethod := tx.WRKChainRootMethod()
+	if callMethod == nil {
+		return false
+	}
+	return false
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
@@ -189,6 +220,19 @@ func (tx *Transaction) To() *common.Address {
 	return &to
 }
 
+func (tx *Transaction) From() *common.Address {
+	if tx.data.V != nil {
+		signer := deriveSigner(tx.data.V)
+		if f, err := Sender(signer, tx); err != nil {
+			return nil
+		} else {
+			return &f
+		}
+	} else {
+		return nil
+	}
+}
+
 // Hash hashes the RLP encoding of tx.
 // It uniquely identifies the transaction.
 func (tx *Transaction) Hash() common.Hash {
@@ -226,6 +270,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		amount:     tx.data.Amount,
 		data:       tx.data.Payload,
 		checkNonce: true,
+		isWrkChainRoot: tx.IsWrkchainRootTransaction(),
 	}
 
 	var err error
@@ -247,15 +292,47 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
+	// If it's a WRKChain Tx, return the Tax price instead
+	if tx.IsWrkchainRootTransaction() {
+		return tx.WRKChainTax()
+	}
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
+}
+
+// WRKChainTax returns amount + 1 UND Tx Tax (in wei)
+// Every WRKChainRoot call will cost 1 UND, but to Register a WRKChain,
+// a deposit is required, hence including amount.
+// Note: Gas is NOT used for WRKChainTax calculation, since gas is 0 for
+// calls to WRKChainRoot smart contract
+func (tx *Transaction) WRKChainTax() *big.Int {
+	tax := params.CalculateNetworkTax(false)
+	tax.Add(tax, tx.data.Amount)
+	return tax
+}
+
+func (tx *Transaction) WRKChainRootMethod() []byte {
+	if tx.IsWrkchainRootTransaction() {
+		//callMethod := hexutil.Encode(tx.Data()[0:4])
+		return tx.Data()[0:4]
+	}
+	return nil
 }
 
 // RawSignatureValues returns the V, R, S signature values of the transaction.
 // The return values should not be modified by the caller.
 func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
+}
+
+// deriveSigner makes a *best* guess about which signer to use.
+func deriveSigner(V *big.Int) Signer {
+	if V.Sign() != 0 && isProtectedV(V) {
+		return NewEIP155Signer(deriveChainId(V))
+	} else {
+		return HomesteadSigner{}
+	}
 }
 
 // Transactions is a Transaction slice type for basic sorting.
@@ -394,9 +471,18 @@ type Message struct {
 	gasPrice   *big.Int
 	data       []byte
 	checkNonce bool
+	isWrkChainRoot bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
+	isWrkChainRoot := false
+
+	if to != nil {
+		if to.String() == common.WRKChainRoot {
+			isWrkChainRoot = true
+		}
+	}
+
 	return Message{
 		from:       from,
 		to:         to,
@@ -406,6 +492,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		gasPrice:   gasPrice,
 		data:       data,
 		checkNonce: checkNonce,
+		isWrkChainRoot: isWrkChainRoot,
 	}
 }
 
@@ -417,3 +504,4 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
+func (m Message) IsWrkchainRootMessage() bool { return m.isWrkChainRoot }

@@ -197,6 +197,17 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	// Fail if the account doesn't have sufficient funds to pay the WRKChain Tax
+	// in addition to any potential transfer (e.g. WRKChain registration deposit)
+	if addr.String() == common.WRKChainRoot {
+		// Todo - check if reg or record Tx
+		tax := params.CalculateNetworkTax(false)
+		tax.Add(tax, value)
+		if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), tax) {
+			return nil, gas, ErrInsufficientBalanceForWRKChainTax
+		}
+	}
+
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()

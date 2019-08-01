@@ -51,6 +51,54 @@ var (
 	)
 )
 
+func wrkChainRootTransaction(key *ecdsa.PrivateKey, nonce uint64, register bool) *Transaction {
+	registerData := "0x5be4e228000000000000000000000000000000000000000000000000000000000000c35900000000000000000000000000000000000000000000000000000000000000608bf71a1bf21b1d51b5503b25892f506c72aa5b740ed4702fa3ba9153d60cabde0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000f30f951b0426f8bf37ac71967407081358df7a7b000000000000000000000000e76d1b02c95c11db13f733c07fce5e173b322b2f"
+	recordData := "0xa78c4988000000000000000000000000000000000000000000000000000000000000c3590000000000000000000000000000000000000000000000000000000000000006092f2d5618d9951cac1ce9a19000bbad6fc052917c93359ad12062bd6e1a3c7d3f5c0dfacaff21bd627a399c9042bb899ad62eb4d0d41a50342e679a45b59a3331c5d8c42ec2f17548f625709feee2c42afce92769aa6e0f79e848f305962bb52ee16f78233750cd388fd2563b5edd2179f1466c9d240cad2db1a9651a0f95ec1abdb0ee40562ed07699a598f0f2eaec386ea18e4e0ba5a588e19013e22af70a000000000000000000000000f30f951b0426f8bf37ac71967407081358df7a7b"
+	data := registerData
+	if !register {
+		data = recordData
+	}
+
+	dataBytes := common.FromHex(data)
+
+	tx, _ := SignTx(NewTransaction(nonce, common.HexToAddress(common.WRKChainRoot), big.NewInt(0), 0, big.NewInt(0), dataBytes), HomesteadSigner{}, key)
+	return tx
+}
+
+func TestIsWRKChainRootTransaction(t *testing.T) {
+	pkey, _ := defaultTestKey()
+
+	tx := wrkChainRootTransaction(pkey, 1, true)
+
+	if tx.IsWrkchainRootTransaction() != true {
+		t.Errorf("expected tx.IsWrkchainRootTransaction == true for register WRKChain, got %t", tx.IsWrkchainRootTransaction())
+	}
+
+	tx = wrkChainRootTransaction(pkey, 1, false)
+
+	if tx.IsWrkchainRootTransaction() != true {
+		t.Errorf("expected tx.IsWrkchainRootTransaction == true for record WRKChain hash, got %t", tx.IsWrkchainRootTransaction())
+	}
+}
+
+func TestIsWRKChainRootTransactionAsMessage(t *testing.T) {
+	pkey, _ := defaultTestKey()
+
+	tx := wrkChainRootTransaction(pkey, 1, true)
+	msg, _ := tx.AsMessage(HomesteadSigner{})
+
+	if msg.IsWrkchainRootMessage() != true {
+		t.Errorf("expected msg.IsWrkchainRootMessage() == true for register WRKChain, got %t", msg.IsWrkchainRootMessage())
+	}
+
+	tx = wrkChainRootTransaction(pkey, 1, false)
+	msg, _ = tx.AsMessage(HomesteadSigner{})
+
+	if msg.IsWrkchainRootMessage() != true {
+		t.Errorf("expected msg.IsWrkchainRootMessage() == true for register WRKChain, got %t", msg.IsWrkchainRootMessage())
+	}
+}
+
 func TestTransactionSigHash(t *testing.T) {
 	var homestead HomesteadSigner
 	if homestead.Hash(emptyTx) != common.HexToHash("c775b99e7ad12f50d819fcd602390467e28141316969f4b57f0626f74fe3b386") {

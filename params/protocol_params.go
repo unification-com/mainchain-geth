@@ -85,6 +85,11 @@ const (
 	Bn256ScalarMulGas       uint64 = 40000  // Gas needed for an elliptic curve scalar multiplication
 	Bn256PairingBaseGas     uint64 = 100000 // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGas uint64 = 80000  // Per-point price for an elliptic curve pairing check
+
+	// UND Tax
+
+	WRKChainRootTax         uint64 = 1 // Tax in UND.
+	WRKChainRegFee          uint64 = 100 // Cost to register a WRKChain
 )
 
 var (
@@ -93,3 +98,14 @@ var (
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
+
+// CalculateNetworkTax returns the network tax for the WRKChain Root Tx
+func CalculateNetworkTax(isReg bool) *big.Int {
+	taxUnd := WRKChainRootTax
+	if isReg {
+		taxUnd = WRKChainRegFee
+	}
+	tax := new(big.Int).SetUint64(taxUnd)
+	tax.Mul(tax, big.NewInt(Ether))
+	return tax
+}

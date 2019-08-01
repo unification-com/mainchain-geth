@@ -144,7 +144,7 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("What is the required deposit amount for registering a WRKChain? (default 10 UND)")
 	deposit := uint64(w.readDefaultInt(10))
 	depositAmount := new(big.Int).SetUint64(deposit)
-	depositAmount = depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
+	depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
 
 	fmt.Println()
 	fmt.Println("How many block hashes does a WRKChain need to submit to get deposit refunded? (default 1000)")
