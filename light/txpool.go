@@ -346,6 +346,10 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		err  error
 	)
 
+	if tx.IsWrkchainRootTransaction() {
+		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex())
+	}
+
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
 	if from, err = types.Sender(pool.signer, tx); err != nil {
@@ -373,7 +377,11 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
+	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
 	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
+		if tx.IsWrkchainRootTransaction() {
+			return core.ErrInsufficientFundsForWRKChainTax
+		}
 		return core.ErrInsufficientFunds
 	}
 

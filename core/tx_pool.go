@@ -76,6 +76,11 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	// ErrInsufficientFundsForWRKChainTax is returned if the account sending a
+	// transaction to the WRKChainRoot contract does not have enough funds to pay
+	// the network tax
+	ErrInsufficientFundsForWRKChainTax = errors.New("insufficient funds to pay wrkchain network tax")
 )
 
 var (
@@ -525,6 +530,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
+
+	if tx.IsWrkchainRootTransaction() {
+		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex())
+	}
+
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
@@ -536,7 +546,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
+	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		// first check if it's a WRKChain Tx, and return a meaningful error
+		if tx.IsWrkchainRootTransaction() {
+			return ErrInsufficientFundsForWRKChainTax
+		}
 		return ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the basic tx fee.
@@ -560,6 +575,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
+	if tx.IsWrkchainRootTransaction() {
+		log.Info("Tx Pool: add: Submitted WRKChain Tx", "fullhash", hash.Hex(), "from", tx.From().Hex())
+	}
+
 	if pool.all.Get(hash) != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
 		return false, fmt.Errorf("known transaction: %x", hash)
