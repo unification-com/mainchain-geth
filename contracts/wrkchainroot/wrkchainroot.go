@@ -19,7 +19,6 @@ import (
 	"github.com/unification-com/mainchain/accounts/abi/bind"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/contracts/wrkchainroot/contract"
-	"math/big"
 )
 
 type WrkchainRoot struct {
@@ -43,8 +42,8 @@ func NewWrkchainRoot(transactOpts *bind.TransactOpts, contractAddr common.Addres
 }
 
 
-func DeployWrkchainRoot(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, wrkchainRegDeposit *big.Int, minBlocksForDepositReturn *big.Int) (common.Address, *WrkchainRoot, error) {
-	wrkchainRootAddr, _, _, err := contract.DeployWRKChainRoot(transactOpts, contractBackend, wrkchainRegDeposit, minBlocksForDepositReturn)
+func DeployWrkchainRoot(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *WrkchainRoot, error) {
+	wrkchainRootAddr, _, _, err := contract.DeployWRKChainRoot(transactOpts, contractBackend)
 	if err != nil {
 		return wrkchainRootAddr, nil, err
 	}
