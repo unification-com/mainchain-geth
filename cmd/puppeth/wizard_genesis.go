@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/unification-com/mainchain/accounts/abi/bind"
 	"github.com/unification-com/mainchain/accounts/abi/bind/backends"
+	"github.com/unification-com/mainchain/contracts/dsg"
 	"github.com/unification-com/mainchain/crypto"
 	"github.com/unification-com/mainchain/rlp"
 	"io"
@@ -40,6 +41,31 @@ import (
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
 )
+
+func dsgContract() ([]byte, map[common.Hash]common.Hash) {
+	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(pKey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	transactOpts := bind.NewKeyedTransactor(pKey)
+
+	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend)
+	if err != nil {
+		fmt.Println("Can't deploy dsg")
+	}
+	contractBackend.Commit()
+	dsgd := time.Now().Add(1000 * time.Millisecond)
+	dsgctx, dsgcancel := context.WithDeadline(context.Background(), dsgd)
+	defer dsgcancel()
+
+	dsgcode, _ := contractBackend.CodeAt(dsgctx, dsgAddress, nil)
+	dsgstorage := make(map[common.Hash]common.Hash)
+
+	dsgstorage[common.HexToHash("0x0")] = common.HexToHash("0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b")
+	dsgstorage[common.HexToHash("0x1")] = common.HexToHash("0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7")
+	dsgstorage[common.HexToHash("0x2")] = common.HexToHash("0xcA29F1275470DE81DE6E1Bb53a55228Da676E752")
+
+	return dsgcode, dsgstorage
+}
 
 // WRKChainRoot
 func wrkchainContract(w *wizard) ([]byte, map[common.Hash]common.Hash) {
