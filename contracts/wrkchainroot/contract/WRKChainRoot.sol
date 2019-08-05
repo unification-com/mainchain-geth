@@ -92,7 +92,6 @@ contract WRKChainRoot {
     * @dev Struct to hold an individual WRKChain's high level data, and latest block hash submission
     */
     struct Wrkchain {
-        uint256 lastBlock; // Last block num submitted
         bytes32 genesisHash; // Genesis Block's hash
         bool isWrkchain; // used in require statements to check if WRKChain exists
         mapping(address => bool) authAddresses; // Current wallet addresses allowed to write hashes
@@ -101,6 +100,7 @@ contract WRKChainRoot {
                        // Owner can add/remove authorised Oracle addresses.
         uint256 numBlocksSubmitted; // Counter for number of blocks submitted
         uint256 numHistoricalBlocksSubmitted; // Counter for number of historical blocks submitted
+        uint256 lastBlock; // Last block num submitted
         bytes32 lastHash; // Latest block hash submitted
         bytes32 lastParentHash; // Latest Parent Block Hash submitted
         bytes32 lastReceiptRoot; // Latest Receipt merkle root submitted (can be repurposed for any arbitrary hash)
@@ -368,9 +368,14 @@ contract WRKChainRoot {
         Wrkchain storage my_wrkchain = wrkchainList[_chainId];
 
         wrkchainList[_chainId].owner = _newOwner;
-        wrkchainList[_chainId].authAddresses[_newOwner] = true;
-
         emit WRKChainOwnerChanged(_chainId, msg.sender, _newOwner);
+
+        // Check the new owner is also authorised
+        if (!wrkchainList[_chainId].authAddresses[_newOwner]) {
+            wrkchainList[_chainId].authAddresses[_newOwner] = true;
+            wrkchainList[_chainId].numAuthAddresses.add(1);
+            emit AuthoriseNewAddress(_chainId, msg.sender, _newOwner);
+        }
     }
 
     /**
