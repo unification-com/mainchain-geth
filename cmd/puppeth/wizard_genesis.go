@@ -135,6 +135,7 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("Which consensus engine to use? (default = clique)")
 	fmt.Println(" 1. Ethash - proof-of-work")
 	fmt.Println(" 2. Clique - proof-of-authority")
+	fmt.Println(" 3. DSG - distributed-stake-governance")
 
 	choice := w.read()
 	switch {
@@ -180,6 +181,8 @@ func (w *wizard) makeGenesis() {
 		for i, signer := range signers {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
+	case choice == "3":
+		// DSG only requires a smart contract for now
 
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
@@ -217,6 +220,23 @@ func (w *wizard) makeGenesis() {
 		Storage: wrkstorage,
 		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
 	}
+
+	// DSG
+	if choice == "3" {
+		genesis.Difficulty = big.NewInt(1)
+		genesis.Config.Clique = &params.CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		}
+
+		dsgcode, dsgstorage := dsgContract()
+		genesis.Alloc[common.HexToAddress(common.DSG)] = core.GenesisAccount{
+			Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+			Code:    dsgcode,
+			Storage: dsgstorage,
+		}
+	}
+
 	// All done, store the genesis and flush to disk
 	log.Info("Configured new genesis block")
 
