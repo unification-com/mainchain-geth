@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/unification-com/mainchain/accounts/abi/bind"
 	"github.com/unification-com/mainchain/accounts/abi/bind/backends"
+	"github.com/unification-com/mainchain/contracts/dsg"
 	"github.com/unification-com/mainchain/crypto"
 	"github.com/unification-com/mainchain/rlp"
 	"io"
@@ -40,6 +41,76 @@ import (
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
 )
+
+func dsgContract() ([]byte, map[common.Hash]common.Hash) {
+	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(pKey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	transactOpts := bind.NewKeyedTransactor(pKey)
+
+	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend)
+	if err != nil {
+		fmt.Println("Can't deploy dsg")
+	}
+	contractBackend.Commit()
+	dsgd := time.Now().Add(1000 * time.Millisecond)
+	dsgctx, dsgcancel := context.WithDeadline(context.Background(), dsgd)
+	defer dsgcancel()
+
+	dsgcode, _ := contractBackend.CodeAt(dsgctx, dsgAddress, nil)
+	dsgstorage := make(map[common.Hash]common.Hash)
+
+	dsgstorage[common.HexToHash("0x0")] = common.HexToHash("0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b")
+	dsgstorage[common.HexToHash("0x1")] = common.HexToHash("0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7")
+	dsgstorage[common.HexToHash("0x2")] = common.HexToHash("0xcA29F1275470DE81DE6E1Bb53a55228Da676E752")
+
+	return dsgcode, dsgstorage
+}
+
+// WRKChainRoot
+func wrkchainContract(w *wizard) ([]byte, map[common.Hash]common.Hash) {
+	fmt.Println()
+	fmt.Println("What is the required deposit amount for registering a WRKChain? (default 10 UND)")
+	deposit := uint64(w.readDefaultInt(10))
+	depositAmount := new(big.Int).SetUint64(deposit)
+	depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
+
+	fmt.Println()
+	fmt.Println("How many block hashes does a WRKChain need to submit to get deposit refunded? (default 1000)")
+	blocks := uint64(w.readDefaultInt(1000))
+	minBlocks := new(big.Int).SetUint64(blocks)
+
+	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(pKey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	transactOpts := bind.NewKeyedTransactor(pKey)
+
+	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend, depositAmount, minBlocks)
+	if err != nil {
+		fmt.Println("Can't deploy WRKChain Root")
+		fmt.Println(err)
+	}
+	contractBackend.Commit()
+
+	wrkd := time.Now().Add(1000 * time.Millisecond)
+	wrkctx, wrkcancel := context.WithDeadline(context.Background(), wrkd)
+	defer wrkcancel()
+	wrkcode, _ := contractBackend.CodeAt(wrkctx, wrkchainRootAddress, nil)
+	wrkstorage := make(map[common.Hash]common.Hash)
+	storage := make(map[common.Hash]common.Hash)
+	wrkf := func(key, val common.Hash) bool {
+		decode := []byte{}
+		trim := bytes.TrimLeft(val.Bytes(), "\x00")
+		rlp.DecodeBytes(trim, &decode)
+		wrkstorage[key] = common.BytesToHash(decode)
+		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
+		return true
+	}
+	contractBackend.ForEachStorageAt(wrkctx, wrkchainRootAddress, nil, wrkf)
+
+	return wrkcode, wrkstorage
+}
+
 
 // makeGenesis creates a new genesis struct based on some user input.
 func (w *wizard) makeGenesis() {
@@ -64,6 +135,7 @@ func (w *wizard) makeGenesis() {
 	fmt.Println("Which consensus engine to use? (default = clique)")
 	fmt.Println(" 1. Ethash - proof-of-work")
 	fmt.Println(" 2. Clique - proof-of-authority")
+	fmt.Println(" 3. DSG - distributed-stake-governance")
 
 	choice := w.read()
 	switch {
@@ -109,6 +181,8 @@ func (w *wizard) makeGenesis() {
 		for i, signer := range signers {
 			copy(genesis.ExtraData[32+i*common.AddressLength:], signer[:])
 		}
+	case choice == "3":
+		// DSG only requires a smart contract for now
 
 	default:
 		log.Crit("Invalid consensus engine choice", "choice", choice)
@@ -140,49 +214,27 @@ func (w *wizard) makeGenesis() {
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// WRKChainRoot
-	fmt.Println()
-	fmt.Println("What is the required deposit amount for registering a WRKChain? (default 10 UND)")
-	deposit := uint64(w.readDefaultInt(10))
-	depositAmount := new(big.Int).SetUint64(deposit)
-	depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
-
-	fmt.Println()
-	fmt.Println("How many block hashes does a WRKChain need to submit to get deposit refunded? (default 1000)")
-	blocks := uint64(w.readDefaultInt(1000))
-	minBlocks := new(big.Int).SetUint64(blocks)
-
-	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	addr := crypto.PubkeyToAddress(pKey.PublicKey)
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
-	transactOpts := bind.NewKeyedTransactor(pKey)
-
-	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend, depositAmount, minBlocks)
-	if err != nil {
-		fmt.Println("Can't deploy WRKChain Root")
-		fmt.Println(err)
-	}
-	contractBackend.Commit()
-
-	wrkd := time.Now().Add(1000 * time.Millisecond)
-	wrkctx, wrkcancel := context.WithDeadline(context.Background(), wrkd)
-	defer wrkcancel()
-	wrkcode, _ := contractBackend.CodeAt(wrkctx, wrkchainRootAddress, nil)
-	wrkstorage := make(map[common.Hash]common.Hash)
-	storage := make(map[common.Hash]common.Hash)
-	wrkf := func(key, val common.Hash) bool {
-		decode := []byte{}
-		trim := bytes.TrimLeft(val.Bytes(), "\x00")
-		rlp.DecodeBytes(trim, &decode)
-		wrkstorage[key] = common.BytesToHash(decode)
-		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
-		return true
-	}
-	contractBackend.ForEachStorageAt(wrkctx, wrkchainRootAddress, nil, wrkf)
-
+	wrkcode, wrkstorage := wrkchainContract(w)
 	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
 		Code:    wrkcode,
 		Storage: wrkstorage,
 		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+	}
+
+	// DSG
+	if choice == "3" {
+		genesis.Difficulty = big.NewInt(1)
+		genesis.Config.Clique = &params.CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		}
+
+		dsgcode, dsgstorage := dsgContract()
+		genesis.Alloc[common.HexToAddress(common.DSG)] = core.GenesisAccount{
+			Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+			Code:    dsgcode,
+			Storage: dsgstorage,
+		}
 	}
 
 	// All done, store the genesis and flush to disk
