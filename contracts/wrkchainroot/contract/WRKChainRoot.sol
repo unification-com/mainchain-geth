@@ -6,6 +6,13 @@ contract WRKChainRoot {
 
     // because it'd be daft not to
     using SafeMath for uint256;
+
+    /**
+    * ---------
+    * CONSTANTS
+    * ---------
+    */
+
     uint constant MAX_AUTH_ORACLE_ADDRESSES = 100;
     bytes32 constant btsNull = "";
 
@@ -25,6 +32,7 @@ contract WRKChainRoot {
         bytes32 _receiptRoot,
         bytes32 _txRoot,
         bytes32 _stateRoot,
+        uint    _timestamp,
         address _submittedBy
     );
 
@@ -41,12 +49,14 @@ contract WRKChainRoot {
         bytes32 _receiptRoot,
         bytes32 _txRoot,
         bytes32 _stateRoot,
+        uint    _timestamp,
         address _submittedBy
     );
 
     event RegisterWrkChain(
         bytes32  indexed _chainId,
-        bytes32  _genesisHash
+        bytes32  _genesisHash,
+        uint    _timestamp
     );
 
     event LogFallbackFunctionCalled(
@@ -96,6 +106,7 @@ contract WRKChainRoot {
         bytes32 lastReceiptRoot; // Latest Receipt merkle root submitted (can be repurposed for any arbitrary hash)
         bytes32 lastTxRoot; // Latest Tx merkle root submitted (can be repurposed for any arbitrary hash)
         bytes32 lastStateRoot; // Latest StateDb merkle root submitted (can be repurposed for any arbitrary hash)
+        uint lastSubmissionTime;
         address lastSubmittedBy; // Latest address to submit the data
     }
 
@@ -194,10 +205,11 @@ contract WRKChainRoot {
             lastReceiptRoot: 0x0,
             lastTxRoot: 0x0,
             lastStateRoot: 0x0,
+            lastSubmissionTime: block.timestamp,
             lastSubmittedBy: msg.sender
         });
 
-        emit RegisterWrkChain(_chainId, _genesisHash);
+        emit RegisterWrkChain(_chainId, _genesisHash, block.timestamp);
 
         for (uint i=0; i< _authAddresses.length; i++) {
             wrkchainList[_chainId].authAddresses[_authAddresses[i]] = true;
@@ -210,7 +222,6 @@ contract WRKChainRoot {
             wrkchainList[_chainId].numAuthAddresses.add(1);
             emit AuthoriseNewAddress(_chainId, msg.sender, msg.sender);
         }
-
     }
 
     /*
@@ -252,6 +263,7 @@ contract WRKChainRoot {
             wrkchainList[_chainId].lastReceiptRoot = _receiptRoot;
             wrkchainList[_chainId].lastTxRoot = _txRoot;
             wrkchainList[_chainId].lastStateRoot = _stateRoot;
+            wrkchainList[_chainId].lastSubmissionTime = block.timestamp;
             wrkchainList[_chainId].lastSubmittedBy = msg.sender;
 
             emit RecordHeader(
@@ -262,6 +274,7 @@ contract WRKChainRoot {
                     _receiptRoot,
                     _txRoot,
                     _stateRoot,
+                    block.timestamp,
                     msg.sender
             );
         } else {
@@ -278,6 +291,7 @@ contract WRKChainRoot {
                     _receiptRoot,
                     _txRoot,
                     _stateRoot,
+                    block.timestamp,
                     msg.sender
             );
         }
@@ -398,6 +412,7 @@ contract WRKChainRoot {
                                                                 bytes32 lastReceiptRoot_,
                                                                 bytes32 lastTxRoot_,
                                                                 bytes32 lastStateRoot_,
+                                                                uint lastSubmissionTime_,
                                                                 address lastSubmittedBy_) {
 
         require(wrkchainList[_chainId].isWrkchain, "Chain ID does not exist");
@@ -409,6 +424,7 @@ contract WRKChainRoot {
         lastReceiptRoot_ = my_wrkchain.lastReceiptRoot;
         lastTxRoot_ = my_wrkchain.lastTxRoot;
         lastStateRoot_ = my_wrkchain.lastStateRoot;
+        lastSubmissionTime_ = my_wrkchain.lastSubmissionTime;
         lastSubmittedBy_ = my_wrkchain.lastSubmittedBy;
     }
 
