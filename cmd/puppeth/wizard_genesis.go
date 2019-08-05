@@ -69,23 +69,12 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 
 // WRKChainRoot
 func wrkchainContract(w *wizard) ([]byte, map[common.Hash]common.Hash) {
-	fmt.Println()
-	fmt.Println("What is the required deposit amount for registering a WRKChain? (default 10 UND)")
-	deposit := uint64(w.readDefaultInt(10))
-	depositAmount := new(big.Int).SetUint64(deposit)
-	depositAmount.Mul(depositAmount, big.NewInt(1000000000000000000))
-
-	fmt.Println()
-	fmt.Println("How many block hashes does a WRKChain need to submit to get deposit refunded? (default 1000)")
-	blocks := uint64(w.readDefaultInt(1000))
-	minBlocks := new(big.Int).SetUint64(blocks)
-
 	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(pKey.PublicKey)
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(pKey)
 
-	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend, depositAmount, minBlocks)
+	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend)
 	if err != nil {
 		fmt.Println("Can't deploy WRKChain Root")
 		fmt.Println(err)
