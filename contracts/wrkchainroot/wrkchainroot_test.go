@@ -779,26 +779,3 @@ func TestChainExists(t *testing.T) {
 		t.Fatalf("ChainExists for %v should be false. Got %v", chainIdNotExist, regged)
 	}
 }
-
-// Not really a test - just dumps some useful info when go test is run with -v flag
-func TestChainIdConversion(t *testing.T) {
-
-	t.Log("wrkchainId", wrkchainId)
-	wrkchainIdBytes := []byte(wrkchainId)
-	t.Log("wrkchainIdBytes", wrkchainIdBytes)
-	wrkchainIdHash := common.BytesToHash(wrkchainIdBytes)
-	t.Log("wrkchainIdHash", wrkchainIdHash)
-	t.Log("wrkchainIdHash.String()", wrkchainIdHash.String())
-	t.Log("wrkchainIdHash.Bytes()", wrkchainIdHash.Bytes())
-	t.Log("string(wrkchainIdHash.Bytes())", string(wrkchainIdHash.Bytes()))
-
-	t.Log("wrkchainIdBytes32", wrkchainIdBytes32)
-	wrkchainIdReString := string(wrkchainIdBytes32.Bytes())
-	t.Log("wrkchainIdReString", wrkchainIdReString)
-
-	nullBytes := common.BytesToHash([]byte(""))
-	t.Log("nullBytes", nullBytes)
-	t.Log("nullBytes.String()", nullBytes.String())
-
-
-}
