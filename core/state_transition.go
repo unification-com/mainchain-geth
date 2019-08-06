@@ -170,7 +170,6 @@ func (st *StateTransition) buyGas() error {
 
 func (st *StateTransition) payTax() error {
 
-	// Todo - check if reg or record Tx
 	tax := params.CalculateNetworkTax(st.msg.IsWrkchainRootRegMessage())
 
 	if st.state.GetBalance(st.msg.From()).Cmp(tax) < 0 {
@@ -256,7 +255,6 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	if msg.IsWrkchainRootMessage() {
 		log.Debug("TransitionDb", "st.msg.To()", st.msg.To().Hex(), "st.msg.From()", st.msg.From().Hex(), "st.evm.Coinbase", st.evm.Coinbase.Hex(), "st.gasUsed()", st.gasUsed(), "st.gasPrice", st.gasPrice, "st.value", st.value, "isreg", st.msg.IsWrkchainRootRegMessage())
 		// Pay WRKChain Tax instead of gas fees.
-		// Todo: Check if reg or record
 		st.distributeTax()
 	} else {
 		st.refundGas()
@@ -270,7 +268,7 @@ func (st *StateTransition) distributeTax() {
 	// Validator receives the WRKChain Tax
 	log.Debug("distributeTax", "st.evm.Coinbase", st.evm.Coinbase.String(), "tax", tax.String())
 	st.state.AddBalance(st.evm.Coinbase, tax)
-	// Todo - work out what % needs to go to validators
+	// Todo - work out what % of reg fee needs to go to validators
 
 	// Add remaining gas to the block gas counter so it is
 	// available for the next transaction.
