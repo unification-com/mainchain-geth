@@ -81,6 +81,9 @@ var (
 	// transaction to the WRKChainRoot contract does not have enough funds to pay
 	// the network tax
 	ErrInsufficientFundsForWRKChainTax = errors.New("insufficient funds to pay wrkchain network tax")
+
+	// ErrContractCreationNotAllowed is returned if Tx is an attempt to deploy a smart contract.
+	ErrContractCreationNotAllowed = errors.New("contract creation not allowed on mainchain - deploy wrkchain")
 )
 
 var (
@@ -512,6 +515,11 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	// Block smart contract creation
+	if tx.To() == nil {
+		return ErrContractCreationNotAllowed
+	}
+
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {
 		return ErrOversizedData

@@ -1392,6 +1392,10 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
+	if tx.To() == nil {
+		return common.Hash{}, core.ErrContractCreationNotAllowed
+	}
+
 	// Todo - check for WRKChain Tx, and fix gas price when
 	// it arrives in the network to avoid potentially
 	// unfair advantages in processing priority
