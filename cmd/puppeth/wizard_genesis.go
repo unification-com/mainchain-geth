@@ -37,6 +37,7 @@ import (
 
 	"github.com/unification-com/mainchain/common"
 	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
+	beaconContract "github.com/unification-com/mainchain/contracts/beacon"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
@@ -67,39 +68,43 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 	return dsgcode, dsgstorage
 }
 
-// WRKChainRoot
-func wrkchainContract(w *wizard) ([]byte, map[common.Hash]common.Hash) {
+// WRKChainRoot & BEACON
+func (w *wizard) deployContract(conType string) ([]byte, map[common.Hash]common.Hash) {
+	fmt.Println("Deploy contract:", conType)
 	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(pKey.PublicKey)
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(pKey)
 
-	wrkchainRootAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend)
+	contractAddress, _, err := wrkchainRootContract.DeployWrkchainRoot(transactOpts, contractBackend)
+	if conType == "beacon" {
+		contractAddress, _, err = beaconContract.DeployBeacon(transactOpts, contractBackend)
+	}
+
 	if err != nil {
-		fmt.Println("Can't deploy WRKChain Root")
+		fmt.Println("Can't deploy contract")
 		fmt.Println(err)
 	}
 	contractBackend.Commit()
 
-	wrkd := time.Now().Add(1000 * time.Millisecond)
-	wrkctx, wrkcancel := context.WithDeadline(context.Background(), wrkd)
-	defer wrkcancel()
-	wrkcode, _ := contractBackend.CodeAt(wrkctx, wrkchainRootAddress, nil)
-	wrkstorage := make(map[common.Hash]common.Hash)
+	d := time.Now().Add(1000 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
+	contractCode, _ := contractBackend.CodeAt(ctx, contractAddress, nil)
+	contractStorage := make(map[common.Hash]common.Hash)
 	storage := make(map[common.Hash]common.Hash)
-	wrkf := func(key, val common.Hash) bool {
+	f := func(key, val common.Hash) bool {
 		decode := []byte{}
 		trim := bytes.TrimLeft(val.Bytes(), "\x00")
 		rlp.DecodeBytes(trim, &decode)
-		wrkstorage[key] = common.BytesToHash(decode)
+		contractStorage[key] = common.BytesToHash(decode)
 		log.Info("DecodeBytes", "value", val.String(), "decode", storage[key].String())
 		return true
 	}
-	contractBackend.ForEachStorageAt(wrkctx, wrkchainRootAddress, nil, wrkf)
+	contractBackend.ForEachStorageAt(ctx, contractAddress, nil, f)
 
-	return wrkcode, wrkstorage
+	return contractCode, contractStorage
 }
-
 
 // makeGenesis creates a new genesis struct based on some user input.
 func (w *wizard) makeGenesis() {
@@ -203,10 +208,18 @@ func (w *wizard) makeGenesis() {
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// WRKChainRoot
-	wrkcode, wrkstorage := wrkchainContract(w)
+	wrkcode, wrkstorage := w.deployContract("wrkchain")
 	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
 		Code:    wrkcode,
 		Storage: wrkstorage,
+		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+	}
+
+	// BEACON
+	beaconCode, beaconSstorage := w.deployContract("beacon")
+	genesis.Alloc[common.HexToAddress(common.Beacon)] = core.GenesisAccount{
+		Code:    beaconCode,
+		Storage: beaconSstorage,
 		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
 	}
 
