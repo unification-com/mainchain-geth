@@ -242,6 +242,16 @@ func init() {
 		if err := debug.Setup(ctx, logdir); err != nil {
 			return err
 		}
+
+		// Disable light & fast sync modes in v1
+		if ctx.GlobalString(utils.SyncModeFlag.Name) != "full" {
+			log.Info("Light and fast sync modes currently disabled. Setting to full sync mode.")
+			err := ctx.GlobalSet(utils.SyncModeFlag.Name, "full")
+			if err != nil {
+				return err
+			}
+		}
+
 		// If we're a full node on mainnet without --cache specified, bump default cache allowance
 		if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
 			// Make sure we're not on any supported preconfigured testnet either
