@@ -532,7 +532,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.IsWrkchainRootTransaction() {
-		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex())
+		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainTransaction())
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price
@@ -576,7 +576,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if tx.IsWrkchainRootTransaction() {
-		log.Info("Tx Pool: add: Submitted WRKChain Tx", "fullhash", hash.Hex(), "from", tx.From().Hex())
+		log.Info("Tx Pool: add: Submitted WRKChain Tx", "fullhash", hash.Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainTransaction())
 	}
 
 	if pool.all.Get(hash) != nil {

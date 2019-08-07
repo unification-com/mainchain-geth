@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/unification-com/mainchain/common/hexutil"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -198,10 +199,13 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	// Fail if the account doesn't have sufficient funds to pay the WRKChain Tax
-	// in addition to any potential transfer (e.g. WRKChain registration deposit)
+	// in addition to any potential transfer
 	if addr.String() == common.WRKChainRoot {
-		// Todo - check if reg or record Tx
-		tax := params.CalculateNetworkTax(false)
+		// Check if it's Reg or other Tx type
+		// Todo - find more efficient method for this
+		wrkMethod := input[0:4]
+		isReg := hexutil.Encode(wrkMethod) == common.RegisterWrkChainMethod
+		tax := params.CalculateNetworkTax(isReg)
 		tax.Add(tax, value)
 		if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), tax) {
 			return nil, gas, ErrInsufficientBalanceForWRKChainTax

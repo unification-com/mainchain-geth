@@ -124,34 +124,22 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
+// IsWrkchainRootTransaction checks if a Tx is a WRKChain
+// Root Tx
 func (tx *Transaction) IsWrkchainRootTransaction() bool {
 	if tx.To() == nil {
 		return false
 	}
-
 	return tx.To().String() == common.WRKChainRoot
 }
 
+// IsRegisterWRKChainTransaction checks whether or not the
+// Tx is registering a wRKChain
 func (tx *Transaction) IsRegisterWRKChainTransaction() bool {
 	if !tx.IsWrkchainRootTransaction() {
 		return false
 	}
-	callMethod := tx.WRKChainRootMethod()
-	if callMethod == nil {
-		return false
-	}
-	return false
-}
-
-func (tx *Transaction) IsRecordWRKChainTransaction() bool {
-	if !tx.IsWrkchainRootTransaction() {
-		return false
-	}
-	callMethod := tx.WRKChainRootMethod()
-	if callMethod == nil {
-		return false
-	}
-	return false
+	return hexutil.Encode(tx.WRKChainRootMethod()) == common.RegisterWrkChainMethod
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -307,14 +295,14 @@ func (tx *Transaction) Cost() *big.Int {
 // Note: Gas is NOT used for WRKChainTax calculation, since gas is 0 for
 // calls to WRKChainRoot smart contract
 func (tx *Transaction) WRKChainTax() *big.Int {
-	tax := params.CalculateNetworkTax(false)
+	tax := params.CalculateNetworkTax(tx.IsRegisterWRKChainTransaction())
 	tax.Add(tax, tx.data.Amount)
 	return tax
 }
 
+// WRKChainRootMethod returns the WRKChain Root method called
 func (tx *Transaction) WRKChainRootMethod() []byte {
 	if tx.IsWrkchainRootTransaction() {
-		//callMethod := hexutil.Encode(tx.Data()[0:4])
 		return tx.Data()[0:4]
 	}
 	return nil
@@ -505,3 +493,10 @@ func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
 func (m Message) IsWrkchainRootMessage() bool { return m.isWrkChainRoot }
+func (m Message) IsWrkchainRootRegMessage() bool {
+	if !m.isWrkChainRoot {
+		return false
+	}
+	wrkMethod := m.data[0:4]
+	return hexutil.Encode(wrkMethod) == common.RegisterWrkChainMethod
+}

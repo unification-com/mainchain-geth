@@ -463,6 +463,7 @@ func (m callmsg) Gas() uint64          { return m.CallMsg.Gas }
 func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
 func (m callmsg) Data() []byte         { return m.CallMsg.Data }
 func (m callmsg) IsWrkchainRootMessage() bool { return m.CallMsg.IsWrkchainRootMessage }
+func (m callmsg) IsWrkchainRootRegMessage() bool { return m.CallMsg.IsWrkchainRootRegMessage}
 
 // filterBackend implements filters.Backend to support filtering for logs without
 // taking bloom-bits acceleration structures into account.

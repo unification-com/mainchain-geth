@@ -89,7 +89,7 @@ const (
 	// UND Tax
 
 	WRKChainRootTax         uint64 = 1 // Tax in UND.
-	WRKChainRegFee          uint64 = 100 // Cost to register a WRKChain
+	WRKChainRegFee          uint64 = 1000 // Cost to register a WRKChain
 )
 
 var (
