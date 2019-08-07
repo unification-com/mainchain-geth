@@ -1411,8 +1411,8 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		addr := crypto.CreateAddress(from, tx.Nonce())
 		log.Info("Submitted contract creation", "fullhash", tx.Hash().Hex(), "contract", addr.Hex())
 	} else {
-		if tx.IsWrkchainRootTransaction() {
-			log.Info("Submitted WRKChain Hashes", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainTransaction())
+		if tx.IsWrkchainBeaconTransaction() {
+			log.Info("Submitted WRKChain/Beacon Hashes", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainBeaconTx())
 		} else {
 			log.Info("Submitted transaction", "fullhash", tx.Hash().Hex(), "recipient", tx.To())
 		}
