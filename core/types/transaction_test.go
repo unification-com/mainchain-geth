@@ -70,14 +70,14 @@ func TestIsWRKChainRootTransaction(t *testing.T) {
 
 	tx := wrkChainRootTransaction(pkey, 1, true)
 
-	if tx.IsWrkchainRootTransaction() != true {
-		t.Errorf("expected tx.IsWrkchainRootTransaction == true for register WRKChain, got %t", tx.IsWrkchainRootTransaction())
+	if tx.IsWrkchainBeaconTransaction() != true {
+		t.Errorf("expected tx.IsWrkchainBeaconTransaction == true for register WRKChain, got %t", tx.IsWrkchainBeaconTransaction())
 	}
 
 	tx = wrkChainRootTransaction(pkey, 1, false)
 
-	if tx.IsWrkchainRootTransaction() != true {
-		t.Errorf("expected tx.IsWrkchainRootTransaction == true for record WRKChain hash, got %t", tx.IsWrkchainRootTransaction())
+	if tx.IsWrkchainBeaconTransaction() != true {
+		t.Errorf("expected tx.IsWrkchainBeaconTransaction == true for record WRKChain hash, got %t", tx.IsWrkchainBeaconTransaction())
 	}
 }
 
@@ -87,15 +87,15 @@ func TestIsWRKChainRootTransactionAsMessage(t *testing.T) {
 	tx := wrkChainRootTransaction(pkey, 1, true)
 	msg, _ := tx.AsMessage(HomesteadSigner{})
 
-	if msg.IsWrkchainRootMessage() != true {
-		t.Errorf("expected msg.IsWrkchainRootMessage() == true for register WRKChain, got %t", msg.IsWrkchainRootMessage())
+	if msg.IsWrkchainBeaconMessage() != true {
+		t.Errorf("expected msg.IsWrkchainBeaconMessage() == true for register WRKChain, got %t", msg.IsWrkchainBeaconMessage())
 	}
 
 	tx = wrkChainRootTransaction(pkey, 1, false)
 	msg, _ = tx.AsMessage(HomesteadSigner{})
 
-	if msg.IsWrkchainRootMessage() != true {
-		t.Errorf("expected msg.IsWrkchainRootMessage() == true for register WRKChain, got %t", msg.IsWrkchainRootMessage())
+	if msg.IsWrkchainBeaconMessage() != true {
+		t.Errorf("expected msg.IsWrkchainBeaconMessage() == true for register WRKChain, got %t", msg.IsWrkchainBeaconMessage())
 	}
 }
 
