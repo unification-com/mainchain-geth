@@ -37,11 +37,12 @@ const (
 	// AddressLength is the expected length of the address
 	AddressLength = 20
 
-	WRKChainRoot        = "0x0000000000000000000000000000000000000087"
-	Beacon              = "0x0000000000000000000000000000000000000088"
-	DSG                 = "0x0000000000000000000000000000000000000091"
+	WRKChainRoot           = "0x0000000000000000000000000000000000000087"
+	Beacon                 = "0x0000000000000000000000000000000000000088"
+	DSG                    = "0x0000000000000000000000000000000000000091"
 
 	RegisterWrkChainMethod = "0x004d6c96"
+	RegisterBeaconMethod   = "0x1149e8a8"
 )
 
 var (
