@@ -346,7 +346,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 		err  error
 	)
 
-	if tx.IsWrkchainRootTransaction() {
+	if tx.IsWrkchainBeaconTransaction() {
 		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex())
 	}
 
@@ -379,7 +379,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	// cost == V + GP * GL
 	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
 	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
-		if tx.IsWrkchainRootTransaction() {
+		if tx.IsWrkchainBeaconTransaction() {
 			return core.ErrInsufficientFundsForWRKChainTax
 		}
 		return core.ErrInsufficientFunds

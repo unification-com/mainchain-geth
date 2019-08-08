@@ -539,8 +539,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInvalidSender
 	}
 
-	if tx.IsWrkchainRootTransaction() {
-		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainTransaction())
+	if tx.IsWrkchainBeaconTransaction() {
+		log.Info("Tx Pool: validateTx: Submitted WRKChain Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainBeaconTx())
 	}
 
 	// Drop non-local transactions under our own minimal accepted gas price
@@ -557,7 +557,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		// first check if it's a WRKChain Tx, and return a meaningful error
-		if tx.IsWrkchainRootTransaction() {
+		if tx.IsWrkchainBeaconTransaction() {
 			return ErrInsufficientFundsForWRKChainTax
 		}
 		return ErrInsufficientFunds
@@ -583,8 +583,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
-	if tx.IsWrkchainRootTransaction() {
-		log.Info("Tx Pool: add: Submitted WRKChain Tx", "fullhash", hash.Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainTransaction())
+	if tx.IsWrkchainBeaconTransaction() {
+		log.Info("Tx Pool: add: Submitted WRKChain Tx", "fullhash", hash.Hex(), "from", tx.From().Hex(), "isreg", tx.IsRegisterWRKChainBeaconTx())
 	}
 
 	if pool.all.Get(hash) != nil {

@@ -124,22 +124,29 @@ func isProtectedV(V *big.Int) bool {
 	return true
 }
 
-// IsWrkchainRootTransaction checks if a Tx is a WRKChain
-// Root Tx
-func (tx *Transaction) IsWrkchainRootTransaction() bool {
+// IsWrkchainBeaconTransaction checks if a Tx is a WRKChain
+// Root or Beacon Tx
+func (tx *Transaction) IsWrkchainBeaconTransaction() bool {
 	if tx.To() == nil {
 		return false
 	}
-	return tx.To().String() == common.WRKChainRoot
+	return tx.To().String() == common.WRKChainRoot || tx.To().String() == common.Beacon
 }
 
-// IsRegisterWRKChainTransaction checks whether or not the
-// Tx is registering a wRKChain
-func (tx *Transaction) IsRegisterWRKChainTransaction() bool {
-	if !tx.IsWrkchainRootTransaction() {
+// IsRegisterWRKChainBeaconTx checks whether or not the
+// Tx is registering a WRKChain or Beacon
+func (tx *Transaction) IsRegisterWRKChainBeaconTx() bool {
+	if !tx.IsWrkchainBeaconTransaction() {
 		return false
 	}
-	return hexutil.Encode(tx.WRKChainRootMethod()) == common.RegisterWrkChainMethod
+
+	callMethodBytes := tx.WRKChainRootMethod()
+	if callMethodBytes == nil {
+		return false
+	}
+
+	callMethod := hexutil.Encode(callMethodBytes)
+	return callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -251,14 +258,14 @@ func (tx *Transaction) Size() common.StorageSize {
 // XXX Rename message to something less arbitrary?
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.data.AccountNonce,
-		gasLimit:   tx.data.GasLimit,
-		gasPrice:   new(big.Int).Set(tx.data.Price),
-		to:         tx.data.Recipient,
-		amount:     tx.data.Amount,
-		data:       tx.data.Payload,
-		checkNonce: true,
-		isWrkChainRoot: tx.IsWrkchainRootTransaction(),
+		nonce:            tx.data.AccountNonce,
+		gasLimit:         tx.data.GasLimit,
+		gasPrice:         new(big.Int).Set(tx.data.Price),
+		to:               tx.data.Recipient,
+		amount:           tx.data.Amount,
+		data:             tx.data.Payload,
+		checkNonce:       true,
+		isWrkChainBeacon: tx.IsWrkchainBeaconTransaction(),
 	}
 
 	var err error
@@ -281,7 +288,7 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 // Cost returns amount + gasprice * gaslimit.
 func (tx *Transaction) Cost() *big.Int {
 	// If it's a WRKChain Tx, return the Tax price instead
-	if tx.IsWrkchainRootTransaction() {
+	if tx.IsWrkchainBeaconTransaction() {
 		return tx.WRKChainTax()
 	}
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
@@ -295,14 +302,14 @@ func (tx *Transaction) Cost() *big.Int {
 // Note: Gas is NOT used for WRKChainTax calculation, since gas is 0 for
 // calls to WRKChainRoot smart contract
 func (tx *Transaction) WRKChainTax() *big.Int {
-	tax := params.CalculateNetworkTax(tx.IsRegisterWRKChainTransaction())
+	tax := params.CalculateNetworkTax(tx.IsRegisterWRKChainBeaconTx())
 	tax.Add(tax, tx.data.Amount)
 	return tax
 }
 
-// WRKChainRootMethod returns the WRKChain Root method called
+// WRKChainRootMethod returns the WRKChain Root or Beacon method called
 func (tx *Transaction) WRKChainRootMethod() []byte {
-	if tx.IsWrkchainRootTransaction() {
+	if tx.IsWrkchainBeaconTransaction() {
 		return tx.Data()[0:4]
 	}
 	return nil
@@ -451,52 +458,52 @@ func (t *TransactionsByPriceAndNonce) Pop() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	data       []byte
-	checkNonce bool
-	isWrkChainRoot bool
+	to               *common.Address
+	from             common.Address
+	nonce            uint64
+	amount           *big.Int
+	gasLimit         uint64
+	gasPrice         *big.Int
+	data             []byte
+	checkNonce       bool
+	isWrkChainBeacon bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
-	isWrkChainRoot := false
+	isWrkChainBeacon := false
 
 	if to != nil {
-		if to.String() == common.WRKChainRoot {
-			isWrkChainRoot = true
+		if to.String() == common.WRKChainRoot || to.String() == common.Beacon {
+			isWrkChainBeacon = true
 		}
 	}
 
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		data:       data,
-		checkNonce: checkNonce,
-		isWrkChainRoot: isWrkChainRoot,
+		from:             from,
+		to:               to,
+		nonce:            nonce,
+		amount:           amount,
+		gasLimit:         gasLimit,
+		gasPrice:         gasPrice,
+		data:             data,
+		checkNonce:       checkNonce,
+		isWrkChainBeacon: isWrkChainBeacon,
 	}
 }
 
-func (m Message) From() common.Address { return m.from }
-func (m Message) To() *common.Address  { return m.to }
-func (m Message) GasPrice() *big.Int   { return m.gasPrice }
-func (m Message) Value() *big.Int      { return m.amount }
-func (m Message) Gas() uint64          { return m.gasLimit }
-func (m Message) Nonce() uint64        { return m.nonce }
-func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return m.checkNonce }
-func (m Message) IsWrkchainRootMessage() bool { return m.isWrkChainRoot }
-func (m Message) IsWrkchainRootRegMessage() bool {
-	if !m.isWrkChainRoot {
+func (m Message) From() common.Address          { return m.from }
+func (m Message) To() *common.Address           { return m.to }
+func (m Message) GasPrice() *big.Int            { return m.gasPrice }
+func (m Message) Value() *big.Int               { return m.amount }
+func (m Message) Gas() uint64                   { return m.gasLimit }
+func (m Message) Nonce() uint64                 { return m.nonce }
+func (m Message) Data() []byte                  { return m.data }
+func (m Message) CheckNonce() bool              { return m.checkNonce }
+func (m Message) IsWrkchainBeaconMessage() bool { return m.isWrkChainBeacon }
+func (m Message) IsRegisterWrkchainBeaconMsg() bool {
+	if !m.isWrkChainBeacon {
 		return false
 	}
-	wrkMethod := m.data[0:4]
-	return hexutil.Encode(wrkMethod) == common.RegisterWrkChainMethod
+	callMethod := hexutil.Encode(m.data[0:4])
+	return callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 }

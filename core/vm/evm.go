@@ -200,11 +200,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Fail if the account doesn't have sufficient funds to pay the WRKChain Tax
 	// in addition to any potential transfer
-	if addr.String() == common.WRKChainRoot {
+	if addr.String() == common.WRKChainRoot || addr.String() == common.Beacon {
 		// Check if it's Reg or other Tx type
 		// Todo - find more efficient method for this
-		wrkMethod := input[0:4]
-		isReg := hexutil.Encode(wrkMethod) == common.RegisterWrkChainMethod
+		callMethod := hexutil.Encode(input[0:4])
+		isReg := callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 		tax := params.CalculateNetworkTax(isReg)
 		tax.Add(tax, value)
 		if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), tax) {

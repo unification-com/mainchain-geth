@@ -113,7 +113,7 @@ func generateWrkchainRootCallMsg(fromAddr common.Address, wrkchainRootAddress co
 	msg.Gas = 10000000
 	msg.GasPrice = big.NewInt(25000)
 	msg.Value = big.NewInt(0)
-	msg.IsWrkchainRootMessage = true
+	msg.IsWrkchainBeaconMessage = true
 	msg.Data = data
 
 	return msg

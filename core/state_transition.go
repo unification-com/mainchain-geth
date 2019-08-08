@@ -75,8 +75,8 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 
-	IsWrkchainRootMessage() bool
-	IsWrkchainRootRegMessage() bool
+	IsWrkchainBeaconMessage() bool
+	IsRegisterWrkchainBeaconMsg() bool
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
@@ -170,7 +170,7 @@ func (st *StateTransition) buyGas() error {
 
 func (st *StateTransition) payTax() error {
 
-	tax := params.CalculateNetworkTax(st.msg.IsWrkchainRootRegMessage())
+	tax := params.CalculateNetworkTax(st.msg.IsRegisterWrkchainBeaconMsg())
 
 	if st.state.GetBalance(st.msg.From()).Cmp(tax) < 0 {
 		return errInsufficientBalanceForWrkchainTax
@@ -201,7 +201,7 @@ func (st *StateTransition) preCheck() error {
 			return ErrNonceTooLow
 		}
 	}
-	if st.msg.IsWrkchainRootMessage() {
+	if st.msg.IsWrkchainBeaconMessage() {
 		return st.payTax()
 	}
 	return st.buyGas()
@@ -252,8 +252,8 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		}
 	}
 
-	if msg.IsWrkchainRootMessage() {
-		log.Debug("TransitionDb", "st.msg.To()", st.msg.To().Hex(), "st.msg.From()", st.msg.From().Hex(), "st.evm.Coinbase", st.evm.Coinbase.Hex(), "st.gasUsed()", st.gasUsed(), "st.gasPrice", st.gasPrice, "st.value", st.value, "isreg", st.msg.IsWrkchainRootRegMessage())
+	if msg.IsWrkchainBeaconMessage() {
+		log.Debug("TransitionDb", "st.msg.To()", st.msg.To().Hex(), "st.msg.From()", st.msg.From().Hex(), "st.evm.Coinbase", st.evm.Coinbase.Hex(), "st.gasUsed()", st.gasUsed(), "st.gasPrice", st.gasPrice, "st.value", st.value, "isreg", st.msg.IsRegisterWrkchainBeaconMsg())
 		// Pay WRKChain Tax instead of gas fees.
 		st.distributeTax()
 	} else {
@@ -264,7 +264,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 }
 
 func (st *StateTransition) distributeTax() {
-	tax := params.CalculateNetworkTax(st.msg.IsWrkchainRootRegMessage())
+	tax := params.CalculateNetworkTax(st.msg.IsRegisterWrkchainBeaconMsg())
 	// Validator receives the WRKChain Tax
 	log.Debug("distributeTax", "st.evm.Coinbase", st.evm.Coinbase.String(), "tax", tax.String())
 	st.state.AddBalance(st.evm.Coinbase, tax)
