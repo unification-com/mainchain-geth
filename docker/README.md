@@ -1,5 +1,9 @@
 # A Dev Docker Composition
 
+Initialises by loading `genesis/und-devnet-50009.json` into `und` by 
+default. `docker-compose-mount.yml` can be configured to make nodes use the 
+`--devnet` flag by setting `DEVNET_JSON=false`
+
 ## Keys used in environment
 
 EV1:
