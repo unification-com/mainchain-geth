@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -367,6 +368,17 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
+func DefaultUndDevnetGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.UndDevnetChainConfig,
+		Timestamp:  1564416699,
+		ExtraData:  hexutil.MustDecode("0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   10485760,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePreallocCode(undDevnetAllocData),
+	}
+}
+
 // DeveloperGenesisBlock returns the 'und --dev' genesis block. Note, this must
 // be seeded with the
 func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
@@ -402,6 +414,34 @@ func decodePrealloc(data string) GenesisAlloc {
 	ga := make(GenesisAlloc, len(p))
 	for _, account := range p {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
+	}
+	return ga
+}
+
+func decodePreallocCode(data string) GenesisAlloc {
+	var p []struct{ Addr, Balance *big.Int
+		Code []byte
+		Storage []byte
+	}
+	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
+		panic(err)
+	}
+	ga := make(GenesisAlloc, len(p))
+
+	for _, account := range p {
+		decBuf := bytes.NewBuffer(account.Storage)
+		var storage map[common.Hash]common.Hash
+		err := gob.NewDecoder(decBuf).Decode(&storage)
+
+		if err != nil {
+			panic(err)
+		}
+		ga[common.BigToAddress(account.Addr)] = GenesisAccount{
+			Balance: account.Balance,
+			Code: account.Code,
+			Storage: storage,
+		}
+
 	}
 	return ga
 }
