@@ -34,6 +34,7 @@ services:
       - UNLOCK_ADDRESS=0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b
       - NODE_KEY=ev1.txt
       - LOG_LEVEL=9
+      - DEVNET_JSON=true # true: load und-devnet-50009.json. false: use --devnet flag & load default hard coded genesis
 
   mainchain-validator-devnet-2:
     hostname: mainchain-validator-devnet-2
@@ -67,6 +68,7 @@ services:
       - UNLOCK_ADDRESS=0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7
       - NODE_KEY=ev2.txt
       - LOG_LEVEL=4
+      - DEVNET_JSON=true
 
   mainchain-validator-devnet-3:
     hostname: mainchain-validator-devnet-3
@@ -100,6 +102,7 @@ services:
       - UNLOCK_ADDRESS=0xcA29F1275470DE81DE6E1Bb53a55228Da676E752
       - NODE_KEY=ev3.txt
       - LOG_LEVEL=4
+      - DEVNET_JSON=true
 
   mainchain-validator-devnet-4:
     hostname: mainchain-validator-devnet-4
@@ -133,6 +136,7 @@ services:
       - UNLOCK_ADDRESS=0xd71aD3263666e03004479B30CA840a26eaC5b763
       - NODE_KEY=ev4.txt
       - LOG_LEVEL=4
+      - DEVNET_JSON=true
 
   mainchain-rpc-devnet:
     hostname: mainchain-rpc-devnet
@@ -170,6 +174,7 @@ services:
       - UNLOCK_ADDRESS=
       - NODE_KEY=
       - LOG_LEVEL=4
+      - DEVNET_JSON=true
 
 networks:
   mainchain_devnet:

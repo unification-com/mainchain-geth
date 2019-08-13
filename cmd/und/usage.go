@@ -106,6 +106,12 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "UND DEVELOPER CHAIN",
+		Flags: []cli.Flag{
+			utils.UndDevNetFlag,
+		},
+	},
+	{
 		Name: "ETHASH",
 		Flags: []cli.Flag{
 			utils.EthashCacheDirFlag,
