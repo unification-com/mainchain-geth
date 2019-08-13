@@ -8,7 +8,21 @@ sleep $((RANDOM%5+1))
 /usr/local/go/bin/go install github.com/unification-com/mainchain/cmd/und
 
 rm -rf /root/.und_mainchain
-/root/.go/bin/und --datadir "/root/.und_mainchain" init /root/.go/src/github.com/unification-com/mainchain/genesis/und-devnet-50009.json
+
+# Set either networkid and load und-devnet-50009.json, or --devnet flag (to auto-load hard-coded Genesis)
+if [[ ${DEVNET_JSON} == 'true' ]]; then
+    # Load und-devnet-50009.json
+    echo "init und CMD with und-devnet-50009.json"
+    /root/.go/bin/und --datadir "/root/.und_mainchain" init /root/.go/src/github.com/unification-com/mainchain/genesis/und-devnet-50009.json
+
+    # set networkid flag
+    NETFLAG='--networkid '"${NETWORK_ID}"
+else
+    # Set the --devnet flag to load hard-coded default DevNet Genesis block
+    echo "Use --devnet flag"
+    NETFLAG='--devnet'
+fi
+
 /root/.go/bin/und --datadir "/root/.und_mainchain" account import --password /root/.accountpassword  /root/.privatekey
 
 mkdir -p /root/.und_mainchain/bootnode_keys
@@ -22,8 +36,9 @@ else
     NODE_FLAGS='--rpc --rpccorsdomain * --rpcaddr 0.0.0.0 --rpcport 8101 --rpcvhosts * --ws --wsaddr 0.0.0.0 --wsport 8111 --wsorigins *'
 fi
 
-APP_FLAGS=' --verbosity '"${LOG_LEVEL}"' --datadir /root/.und_mainchain --identity "'"${IDENTITY}"'" --networkid '"${NETWORK_ID}"' --port '"${LISTEN_PORT}"' --syncmode=full --nodiscover'
+APP_FLAGS=' --verbosity '"${LOG_LEVEL}"' --datadir /root/.und_mainchain --identity "'"${IDENTITY}"'" '${NETFLAG}' --port '"${LISTEN_PORT}"' --syncmode=full --nodiscover'
 
-echo ${APP_FLAGS}
+echo "Generated flags:"
+echo "${APP_FLAGS} ${NODE_FLAGS}"
 
 /root/.go/bin/und ${APP_FLAGS} ${NODE_FLAGS}
