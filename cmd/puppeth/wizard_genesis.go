@@ -69,7 +69,7 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 }
 
 // WRKChainRoot & BEACON
-func (w *wizard) deployContract(conType string) ([]byte, map[common.Hash]common.Hash) {
+func deployContract(conType string) ([]byte, map[common.Hash]common.Hash) {
 	fmt.Println("Deploy contract:", conType)
 	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(pKey.PublicKey)
@@ -208,7 +208,7 @@ func (w *wizard) makeGenesis() {
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// WRKChainRoot
-	wrkcode, wrkstorage := w.deployContract("wrkchain")
+	wrkcode, wrkstorage := deployContract("wrkchain")
 	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
 		Code:    wrkcode,
 		Storage: wrkstorage,
@@ -216,7 +216,7 @@ func (w *wizard) makeGenesis() {
 	}
 
 	// BEACON
-	beaconCode, beaconSstorage := w.deployContract("beacon")
+	beaconCode, beaconSstorage := deployContract("beacon")
 	genesis.Alloc[common.HexToAddress(common.Beacon)] = core.GenesisAccount{
 		Code:    beaconCode,
 		Storage: beaconSstorage,
