@@ -98,10 +98,11 @@ func (s *stateObject) empty() bool {
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
-	Nonce    uint64
-	Balance  *big.Int
-	Root     common.Hash // merkle root of the storage trie
-	CodeHash []byte
+	Nonce        uint64
+	Balance      *big.Int
+	Root         common.Hash // merkle root of the storage trie
+	CodeHash     []byte
+	LockedAmount *big.Int
 }
 
 // newObject creates a state object.
@@ -111,6 +112,9 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	}
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
+	}
+	if data.LockedAmount == nil {
+		data.LockedAmount = new(big.Int)
 	}
 	return &stateObject{
 		db:            db,
@@ -313,6 +317,45 @@ func (s *stateObject) setBalance(amount *big.Int) {
 	s.data.Balance = amount
 }
 
+// AddLockedAmount adds amount to c's locked amount.
+// It is used to track locked UND spent on network tax.
+func (s *stateObject) AddLockedAmount(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Sign() == 0 {
+		if s.empty() {
+			s.touch()
+		}
+
+		return
+	}
+	s.SetLockedAmount(new(big.Int).Add(s.LockedAmount(), amount))
+}
+
+// SubLockedAmount removes amount from c's locked amount.
+// It is used to track locked UND spent on network tax.
+func (s *stateObject) SubLockedAmount(amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	if new(big.Int).Sub(s.LockedAmount(), amount).Sign() < 0 {
+		return
+	}
+	s.SetLockedAmount(new(big.Int).Sub(s.LockedAmount(), amount))
+}
+
+func (s *stateObject) SetLockedAmount(amount *big.Int) {
+	s.db.journal.append(lockedAmountChange{
+		account: &s.address,
+		prev:    new(big.Int).Set(s.data.LockedAmount),
+	})
+	s.setLockedAmount(amount)
+}
+
+func (s *stateObject) setLockedAmount(amount *big.Int) {
+	s.data.LockedAmount = amount
+}
+
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (s *stateObject) ReturnGas(gas *big.Int) {}
 
@@ -393,6 +436,18 @@ func (s *stateObject) Balance() *big.Int {
 
 func (s *stateObject) Nonce() uint64 {
 	return s.data.Nonce
+}
+
+func (s *stateObject) LockedAmount() *big.Int {
+	return s.data.LockedAmount
+}
+
+func (s *stateObject) Locked() bool {
+	return s.data.LockedAmount.Sign() > 0
+}
+
+func (s *stateObject) Available() *big.Int {
+	return new(big.Int).Sub(s.data.Balance, s.data.LockedAmount)
 }
 
 // Never called, but must be present to allow stateObject to be used

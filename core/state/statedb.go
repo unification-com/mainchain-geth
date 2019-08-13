@@ -228,6 +228,34 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
+// Retrieve the locked amount from the given address or 0 if object not found
+func (self *StateDB) GetLockedAmount(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.LockedAmount()
+	}
+	return common.Big0
+}
+
+// Retrieve the amount available for generic transfer from the given address or 0 if object not found
+// Result is Balance - LockedAmount
+func (self *StateDB) GetAvailable(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Available()
+	}
+	return common.Big0
+}
+
+// Retrieve the locked status from the given address or false if object not found
+func (self *StateDB) GetLocked(addr common.Address) bool {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Locked()
+	}
+	return false
+}
+
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -365,6 +393,29 @@ func (self *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+// AddLockedAmount adds locked amount to the account associated with addr.
+func (self *StateDB) AddLockedAmount(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddLockedAmount(amount)
+	}
+}
+
+// SubLockedAmount subtracts locked amount from the account associated with addr.
+func (self *StateDB) SubLockedAmount(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubLockedAmount(amount)
+	}
+}
+
+func (self *StateDB) SetLockedAmount(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetLockedAmount(amount)
+	}
+}
+
 func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -400,9 +451,12 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 		account:     &addr,
 		prev:        stateObject.suicided,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
+		prevlockedamount: new(big.Int).Set(stateObject.LockedAmount()),
+		prevlocked: stateObject.Locked(),
 	})
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
+	stateObject.data.LockedAmount = new(big.Int)
 
 	return true
 }
@@ -512,6 +566,7 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := self.createObject(addr)
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
+		newObj.setLockedAmount(prev.data.LockedAmount)
 	}
 }
 
