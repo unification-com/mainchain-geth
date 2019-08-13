@@ -36,7 +36,7 @@ cp /root/.go/src/github.com/unification-com/mainchain/docker/assets/bootnode_key
 if [[ ${NODE_TYPE} == 'validator' ]]; then
     NODE_FLAGS='--nodekey=/root/.und_mainchain/bootnode_keys/'"${NODE_KEY}"' --password /root/.accountpassword --mine --gasprice 1 --targetgaslimit 420000000 --etherbase '"${UNLOCK_ADDRESS}"' --unlock '"${UNLOCK_ADDRESS}"
 else
-    NODE_FLAGS='--rpc --rpccorsdomain * --rpcaddr 0.0.0.0 --rpcport 8101 --rpcvhosts * --ws --wsaddr 0.0.0.0 --wsport 8111 --wsorigins *'
+    NODE_FLAGS='--rpc --rpccorsdomain "*" --rpcaddr 0.0.0.0 --rpcport 8101 --rpcvhosts "*" --ws --wsaddr 0.0.0.0 --wsport 8111 --wsorigins "*"'
 fi
 
 # Generate all necessary flags to run
