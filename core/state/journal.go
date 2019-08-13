@@ -97,7 +97,6 @@ type (
 		prev        bool // whether account had already suicided
 		prevbalance *big.Int
 		prevlockedamount *big.Int
-		prevlocked  bool
 	}
 
 	// Changes to individual accounts.
