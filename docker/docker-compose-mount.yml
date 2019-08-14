@@ -35,6 +35,7 @@ services:
       - NODE_KEY=ev1.txt
       - LOG_LEVEL=9
       - DEVNET_JSON=true # true: load und-devnet-50009.json. false: use --devnet flag & load default hard coded genesis
+      - DATA_DIR=/root/.und_mainchain/unddevnet
 
   mainchain-validator-devnet-2:
     hostname: mainchain-validator-devnet-2
@@ -69,6 +70,7 @@ services:
       - NODE_KEY=ev2.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true
+      - DATA_DIR=/root/.und_mainchain/unddevnet
 
   mainchain-validator-devnet-3:
     hostname: mainchain-validator-devnet-3
@@ -103,6 +105,7 @@ services:
       - NODE_KEY=ev3.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true
+      - DATA_DIR=/root/.und_mainchain/unddevnet
 
   mainchain-validator-devnet-4:
     hostname: mainchain-validator-devnet-4
@@ -137,6 +140,7 @@ services:
       - NODE_KEY=ev4.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true
+      - DATA_DIR=/root/.und_mainchain/unddevnet
 
   mainchain-rpc-devnet:
     hostname: mainchain-rpc-devnet
@@ -175,6 +179,7 @@ services:
       - NODE_KEY=
       - LOG_LEVEL=4
       - DEVNET_JSON=true
+      - DATA_DIR=/root/.und_mainchain/unddevnet
 
 networks:
   mainchain_devnet:
