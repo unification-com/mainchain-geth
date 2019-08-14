@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/unification-com/mainchain/common"
-	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
 	beaconContract "github.com/unification-com/mainchain/contracts/beacon"
+	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
@@ -68,8 +68,34 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 	return dsgcode, dsgstorage
 }
 
+func dsgContractByConfig(keys EVConfig) ([]byte, map[common.Hash]common.Hash) {
+	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	addr := crypto.PubkeyToAddress(pKey.PublicKey)
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+	transactOpts := bind.NewKeyedTransactor(pKey)
+
+	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend)
+	if err != nil {
+		fmt.Println("Can't deploy dsg")
+	}
+	contractBackend.Commit()
+	dsgd := time.Now().Add(1000 * time.Millisecond)
+	dsgctx, dsgcancel := context.WithDeadline(context.Background(), dsgd)
+	defer dsgcancel()
+
+	dsgcode, _ := contractBackend.CodeAt(dsgctx, dsgAddress, nil)
+	dsgstorage := make(map[common.Hash]common.Hash)
+
+	for k, s := range keys.EVs {
+		fmt.Println(s)
+
+		dsgstorage[common.BigToHash(big.NewInt(int64(k)))] = common.HexToHash(s.Address)
+	}
+	return dsgcode, dsgstorage
+}
+
 // WRKChainRoot & BEACON
-func (w *wizard) deployContract(conType string) ([]byte, map[common.Hash]common.Hash) {
+func deployContract(conType string) ([]byte, map[common.Hash]common.Hash) {
 	fmt.Println("Deploy contract:", conType)
 	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(pKey.PublicKey)
@@ -208,7 +234,7 @@ func (w *wizard) makeGenesis() {
 	genesis.Config.ChainID = new(big.Int).SetUint64(uint64(w.readDefaultInt(rand.Intn(65536))))
 
 	// WRKChainRoot
-	wrkcode, wrkstorage := w.deployContract("wrkchain")
+	wrkcode, wrkstorage := deployContract("wrkchain")
 	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
 		Code:    wrkcode,
 		Storage: wrkstorage,
@@ -216,7 +242,7 @@ func (w *wizard) makeGenesis() {
 	}
 
 	// BEACON
-	beaconCode, beaconSstorage := w.deployContract("beacon")
+	beaconCode, beaconSstorage := deployContract("beacon")
 	genesis.Alloc[common.HexToAddress(common.Beacon)] = core.GenesisAccount{
 		Code:    beaconCode,
 		Storage: beaconSstorage,
@@ -290,6 +316,66 @@ func (w *wizard) importGenesis() {
 	log.Info("Imported genesis block")
 
 	w.conf.Genesis = &genesis
+	w.conf.flush()
+}
+
+// configure a genesis file from a JSON file and sane defaults
+func (w *wizard) autoGenesis(target string) {
+	log.Info("Auto configuring genesis")
+
+	evConfig := parseConfiguration(target)
+
+	// Construct a default genesis block
+	genesis := &core.Genesis{
+		Timestamp:  uint64(time.Now().Unix()),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(524288),
+		Alloc:      make(core.GenesisAlloc),
+		Config: &params.ChainConfig{
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
+		},
+	}
+
+	// In the case of dsg, configure the consensus parameters
+	genesis.Difficulty = big.NewInt(1)
+	genesis.Config.Clique = &params.CliqueConfig{
+		Period: 15,
+		Epoch:  30000,
+	}
+
+	genesis.Config.ChainID = new(big.Int).SetUint64(evConfig.NetworkID)
+
+	// WRKChainRoot
+	wrkcode, wrkstorage := deployContract("wrkchain")
+	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
+		Code:    wrkcode,
+		Storage: wrkstorage,
+		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+	}
+
+	// BEACON
+	beaconCode, beaconSstorage := deployContract("beacon")
+	genesis.Alloc[common.HexToAddress(common.Beacon)] = core.GenesisAccount{
+		Code:    beaconCode,
+		Storage: beaconSstorage,
+		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+	}
+
+	dsgcode, dsgstorage := dsgContractByConfig(evConfig)
+	genesis.Alloc[common.HexToAddress(common.DSG)] = core.GenesisAccount{
+		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+		Code:    dsgcode,
+		Storage: dsgstorage,
+	}
+
+	w.conf.path = filepath.Join(os.Getenv("HOME"), ".puppeth", w.network)
+	w.conf.Genesis = genesis
 	w.conf.flush()
 }
 

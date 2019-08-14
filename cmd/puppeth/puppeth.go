@@ -37,6 +37,10 @@ func main() {
 			Name:  "network",
 			Usage: "name of the network to administer (no spaces or hyphens, please)",
 		},
+		cli.StringFlag{
+			Name:  "json",
+			Usage: "json configuration file that overrides CLI input",
+		},
 		cli.IntFlag{
 			Name:  "loglevel",
 			Value: 3,
@@ -57,9 +61,15 @@ func main() {
 // runWizard start the wizard and relinquish control to it.
 func runWizard(c *cli.Context) error {
 	network := c.String("network")
-	if strings.Contains(network, " ") || strings.Contains(network, "-") || strings.ToLower(network) != network {
-		log.Crit("No spaces, hyphens or capital letters allowed in network name")
+	json := c.String("json")
+
+	if json != "" {
+		makeWizard(c.String("network")).autoGenesis(json)
+	} else {
+		if strings.Contains(network, " ") || strings.Contains(network, "-") || strings.ToLower(network) != network {
+			log.Crit("No spaces, hyphens or capital letters allowed in network name")
+		}
+		makeWizard(c.String("network")).run()
 	}
-	makeWizard(c.String("network")).run()
 	return nil
 }
