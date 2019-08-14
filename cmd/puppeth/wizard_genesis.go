@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/unification-com/mainchain/common"
-	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
 	beaconContract "github.com/unification-com/mainchain/contracts/beacon"
+	wrkchainRootContract "github.com/unification-com/mainchain/contracts/wrkchainroot"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
