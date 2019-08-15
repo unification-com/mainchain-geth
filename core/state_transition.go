@@ -188,6 +188,11 @@ func (st *StateTransition) payTax() error {
 	// Subtract the WRKChain tax from the sender account
 	st.state.SubBalance(st.msg.From(), tax)
 
+	// Subtract from Locked Amount, if applicable
+	if st.state.GetLockedAmount(st.msg.From()).Sign() > 0 {
+		st.state.SubLockedAmount(st.msg.From(), tax)
+	}
+
 	return nil
 }
 
@@ -231,7 +236,8 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	var (
 		evm = st.evm
 		// vm errors do not effect consensus and are therefor
-		// not assigned to err, except for insufficient balance
+		// not assigned to err, except for insufficient balance,
+		// insufficient funds for tax, and cannot transfer locked UND errors
 		// error.
 		vmerr error
 	)
@@ -247,7 +253,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
-		if vmerr == vm.ErrInsufficientBalance {
+		if vmerr == vm.ErrInsufficientBalance || (vmerr == vm.ErrCannotTransferLockedUnd || vmerr == vm.ErrInsufficientBalanceForWRKChainTax) {
 			return nil, 0, false, vmerr
 		}
 	}
