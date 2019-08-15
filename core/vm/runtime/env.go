@@ -36,6 +36,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 		GasLimit:    cfg.GasLimit,
 		GasPrice:    cfg.GasPrice,
 		HasEnoughUnlocked: core.HasEnoughUnlocked,
+		LockUnd: core.LockUnd,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

@@ -339,6 +339,8 @@ func (s *stateObject) SubLockedAmount(amount *big.Int) {
 		return
 	}
 	if new(big.Int).Sub(s.LockedAmount(), amount).Sign() < 0 {
+		// shouldn't be negative
+		s.SetLockedAmount(new(big.Int).SetUint64(0))
 		return
 	}
 	s.SetLockedAmount(new(big.Int).Sub(s.LockedAmount(), amount))

@@ -56,6 +56,7 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		GasLimit:    header.GasLimit,
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 		HasEnoughUnlocked: HasEnoughUnlocked,
+		LockUnd: LockUnd,
 	}
 }
 
@@ -104,4 +105,11 @@ func HasEnoughUnlocked(db vm.StateDB, addr common.Address, amount *big.Int) bool
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
+}
+
+func LockUnd(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	// Todo - remove inefficient HexToAddress conversion
+	if sender == common.HexToAddress(common.EnterpriseUndAddress) {
+		db.AddLockedAmount(recipient, amount)
+	}
 }

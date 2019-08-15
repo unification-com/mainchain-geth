@@ -41,6 +41,7 @@ type (
 	GetHashFunc func(uint64) common.Hash
 
 	HasEnoughUnlockedFunc func(StateDB, common.Address, *big.Int) bool
+	LockUndFunc func(StateDB, common.Address, common.Address, *big.Int)
 )
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
@@ -93,6 +94,7 @@ type Context struct {
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 
 	HasEnoughUnlocked HasEnoughUnlockedFunc
+	LockUnd LockUndFunc
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -246,6 +248,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	evm.LockUnd(evm.StateDB, caller.Address(), to.Address(), value)
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, to, value, gas)
@@ -451,7 +454,7 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.StateDB.SetNonce(address, 1)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), address, value)
-
+	evm.LockUnd(evm.StateDB, caller.Address(), address, value)
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.
 	contract := NewContract(caller, AccountRef(address), value, gas)

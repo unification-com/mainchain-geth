@@ -43,6 +43,9 @@ const (
 
 	RegisterWrkChainMethod = "0x004d6c96"
 	RegisterBeaconMethod   = "0x1149e8a8"
+
+	// Todo - embed in Genesis header config
+	EnterpriseUndAddress   = "0xf30F951b0426f8Bf37ac71967407081358DF7a7B"
 )
 
 var (
