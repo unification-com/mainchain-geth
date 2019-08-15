@@ -202,7 +202,7 @@ func TestSnapshot2(t *testing.T) {
 	}
 }
 
-func TestUndLocking(t *testing.T) {
+func TestSimpleUndLocking(t *testing.T) {
 
 	// Create a random state test
 	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
@@ -226,24 +226,53 @@ func TestUndLocking(t *testing.T) {
 			t.Errorf("obj %d: locked mismatch: have %v, want %v", i, obj.Locked(), want)
 		}
 	}
+}
 
-	// subtract equal amount, and check unlocked
+func TestLockAndUnlockUnd(t *testing.T) {
+
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	// Add Balance, and Locked Amount (Balance - 1)
 	for i := byte(0); i < 255; i++ {
 		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-		obj.SubBalance(big.NewInt(int64(i + 1)))
-		obj.SubLockedAmount(big.NewInt(int64(i + 1)))
+		obj.AddBalance(big.NewInt(int64(i) + 1))
 		stateObj.updateStateObject(obj)
 	}
 	stateObj.Finalise(false)
 
 	for i := byte(0); i < 255; i++ {
 		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
-
-		if want := big.NewInt(0); obj.LockedAmount().Cmp(want) != 0 {
-			t.Errorf("obj %d: locked amount mismatch: have %v, want %v", i, obj.LockedAmount(), want)
-		}
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
 		if want := false; obj.Locked() != want {
-			t.Errorf("obj %d: locked mismatch: have %v, want %v", i, obj.Locked(), want)
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+		}
+
+		// Add some more balance and locked UND
+		obj.AddBalance(big.NewInt(int64(i) + 1))
+		obj.AddLockedAmount(big.NewInt(int64(i) + 1))
+		stateObj.updateStateObject(obj)
+	}
+
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
+		if want := true; obj.Locked() != want {
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+		}
+		// Sub some balance and locked UND
+		obj.SubBalance(big.NewInt(int64(i) + 1))
+		obj.SubLockedAmount(big.NewInt(int64(i) + 1))
+		stateObj.updateStateObject(obj)
+	}
+
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
+		if want := false; obj.Locked() != want {
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
 		}
 	}
 }
@@ -267,6 +296,39 @@ func TestUndAvailable(t *testing.T) {
 		if want := big.NewInt(int64(1)); obj.Available().Cmp(want) != 0 {
 			t.Errorf("obj %d: amount available mismatch: have %v, want %v", i, obj.Available(), want)
 		}
+	}
+}
+
+func TestCannotLockBelowZero(t *testing.T) {
+	var amount int64 = 20
+	var amountLocked int64 = 10
+	addr := byte(1)
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+	obj.AddBalance(big.NewInt(amount))
+	obj.AddLockedAmount(big.NewInt(amountLocked))
+	stateObj.updateStateObject(obj)
+	stateObj.Finalise(false)
+
+	for i := int64(0); i <= (amountLocked * 2); i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+		obj.SubLockedAmount(big.NewInt(int64(1)))
+		stateObj.updateStateObject(obj)
+		//t.Logf("available %v, locked amount %v, balance %v, locked %v", obj.Available(), obj.LockedAmount(), obj.Balance(), obj.Locked())
+	}
+	stateObj.Finalise(false)
+
+	obj = stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+	if want := big.NewInt(int64(0)); obj.LockedAmount().Cmp(want) != 0 {
+		t.Errorf("locked amount mismatch: have %v, want %v", obj.LockedAmount(), want)
+	}
+
+	if want := false; obj.Locked() != want {
+		t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+	}
+
+	if want := big.NewInt(amount); obj.Available().Cmp(want) != 0 {
+		t.Errorf("available mismatch: have %v, want %v", obj.Available(), want)
 	}
 }
 

@@ -17,6 +17,7 @@
 package runtime
 
 import (
+	"github.com/unification-com/mainchain/core"
 	"math/big"
 	"strings"
 	"testing"
@@ -115,6 +116,79 @@ func TestCall(t *testing.T) {
 	if num.Cmp(big.NewInt(10)) != 0 {
 		t.Error("Expected 10, got", num)
 	}
+}
+
+func TestInsufficientFundsToPayWrkChainTax(t *testing.T) {
+	stateObj, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	wrkchainRoot := common.HexToAddress("0x87")
+	from := common.HexToAddress("0x0a")
+
+	stateObj.SetBalance(from, big.NewInt(1))
+
+	stateObj.SetCode(wrkchainRoot, []byte{
+		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	})
+
+	stateObj.Finalise(false)
+
+	_, _, err := Call(wrkchainRoot, []byte{'a', 'b', 'c', 'd'}, &Config{State: stateObj, Origin:from})
+
+	if err == nil {
+		t.Fatalf("expected %v, got %v", core.ErrCannotTransferLockedUnd, err)
+	}
+
+	bal := new(big.Int).SetUint64(2)
+	bal.Mul(bal, big.NewInt(1e18))
+	stateObj.SetBalance(from, bal)
+	stateObj.Finalise(false)
+
+	_, _, err = Call(wrkchainRoot, []byte{'a', 'b', 'c', 'd'}, &Config{State: stateObj, Origin:from})
+
+	if err != nil {
+		t.Fatalf("didn't expect error, got %v", err)
+	}
+
+}
+
+func TestHasEnoughUnlocked(t *testing.T) {
+	stateObj, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
+	to := common.HexToAddress("0x0a")
+	from := common.HexToAddress("0x0b")
+
+	stateObj.SetBalance(from, big.NewInt(100000000000))
+	stateObj.SetLockedAmount(from, big.NewInt(100000000000))
+
+	stateObj.SetCode(to, []byte{
+		byte(vm.PUSH1), 10,
+		byte(vm.PUSH1), 0,
+		byte(vm.MSTORE),
+		byte(vm.PUSH1), 32,
+		byte(vm.PUSH1), 0,
+		byte(vm.RETURN),
+	})
+
+	stateObj.Finalise(false)
+
+	_, _, err := Call(to, nil, &Config{State: stateObj, Origin: from, Value: big.NewInt(50000000000)})
+
+	if err == nil {
+		t.Fatalf("expected %v, got %v", core.ErrCannotTransferLockedUnd, err)
+	}
+
+	stateObj.SetLockedAmount(from, big.NewInt(0))
+	stateObj.Finalise(false)
+
+	_, _, err = Call(to, nil, &Config{State: stateObj, Origin: from, Value: big.NewInt(50000000000)})
+
+	if err != nil {
+		t.Fatalf("didn't expect error, got %v", err)
+	}
+
 }
 
 func BenchmarkCall(b *testing.B) {
