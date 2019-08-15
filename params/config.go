@@ -25,12 +25,21 @@ import (
 	"github.com/unification-com/mainchain/crypto"
 )
 
+// TODO: Remove Ethereum's Mainnet, Testnet, Rinkeby & Goerli configs, since they do not apply to UND Mainchain
+
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
-	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-	GoerliGenesisHash  = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
+	// Irrelevant for Unification & DSG - modified for Unit testing purposes to take into account
+	// new hashes due to new Account.LockedAmount field
+	// Old MainnetGenesisHash = 0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3
+	MainnetGenesisHash = common.HexToHash("0x6901c1e1088aa64d0b0649590ec88494b3ddffd8f186c67c993b35257283bbad")
+	// Old TestnetGenesisHash = 0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d
+	TestnetGenesisHash = common.HexToHash("0x7b4d6340276b8bc0550aabdf1bd05ff41c851fd7b00c4a324133f129a464210c")
+	// Old RinkebyGenesisHash = 0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177
+	RinkebyGenesisHash = common.HexToHash("0xda6162d0ea22a986935f24c672adf578b49d03441b3b81a803a17e3982755b19")
+	// Old GoerliGenesisHash = 0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a
+	GoerliGenesisHash  = common.HexToHash("0x4b61ba759105f6304fbfb0605f052baac8c13bbe99619ffae5f679ccf182a449")
+	UndDevNetGenesisHash = common.HexToHash("0x64a6767888578c282099915ea0395a6bbde653a0bddec3a969e700d6594edd98")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
