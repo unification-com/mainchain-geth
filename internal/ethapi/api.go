@@ -550,6 +550,41 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+// GetLockedAmount returns the amount of wei for the given address in the state of the
+// given block number that is currently locked (purchased Enterprise UND).
+// The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetLockedAmount(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(state.GetLockedAmount(address)), state.Error()
+}
+
+// GetLocked returns whether or not an account currently has locked UND (purchased Enterprise UND).
+// The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetLocked(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (bool, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return false, err
+	}
+	return state.GetLocked(address), state.Error()
+}
+
+// GetAvailable returns the amount of wei for the given address in the state of the
+// given block number that is currently available for standard transfer/usage (balance - locked amount (purchased Enterprise UND)).
+// The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetAvailable(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(state.GetAvailable(address)), state.Error()
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`
@@ -559,6 +594,7 @@ type AccountResult struct {
 	Nonce        hexutil.Uint64  `json:"nonce"`
 	StorageHash  common.Hash     `json:"storageHash"`
 	StorageProof []StorageResult `json:"storageProof"`
+	LockedAmount *hexutil.Big    `json:"lockedAmount"`
 }
 type StorageResult struct {
 	Key   string       `json:"key"`
@@ -613,6 +649,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		Nonce:        hexutil.Uint64(state.GetNonce(address)),
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
+		LockedAmount: (*hexutil.Big)(state.GetLockedAmount(address)),
 	}, state.Error()
 }
 

@@ -347,6 +347,31 @@ func (ec *Client) BalanceAt(ctx context.Context, account common.Address, blockNu
 	return (*big.Int)(&result), err
 }
 
+// LockedAmountAt returns the wei locked amount (purchased Enterprise UND) of the given account.
+// The block number can be nil, in which case the balance is taken from the latest known block.
+func (ec *Client) LockedAmountAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_getLockedAmount", account, toBlockNumArg(blockNumber))
+	return (*big.Int)(&result), err
+}
+
+// LockedAt returns locked status of the given account.
+// The block number can be nil, in which case the balance is taken from the latest known block.
+func (ec *Client) LockedAt(ctx context.Context, account common.Address, blockNumber *big.Int) (bool, error) {
+	var result bool
+	err := ec.c.CallContext(ctx, &result, "eth_getLocked", account, toBlockNumArg(blockNumber))
+	return result, err
+}
+
+// AvailableAt returns the wei amount available for standard transfers (balance - locked amount (purchased Enterprise UND))
+// of the given account.
+// The block number can be nil, in which case the balance is taken from the latest known block.
+func (ec *Client) AvailableAt(ctx context.Context, account common.Address, blockNumber *big.Int) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_getAvailable", account, toBlockNumArg(blockNumber))
+	return (*big.Int)(&result), err
+}
+
 // StorageAt returns the value of key in the contract storage of the given account.
 // The block number can be nil, in which case the value is taken from the latest known block.
 func (ec *Client) StorageAt(ctx context.Context, account common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
@@ -420,6 +445,28 @@ func toFilterArg(q ethereum.FilterQuery) (interface{}, error) {
 func (ec *Client) PendingBalanceAt(ctx context.Context, account common.Address) (*big.Int, error) {
 	var result hexutil.Big
 	err := ec.c.CallContext(ctx, &result, "eth_getBalance", account, "pending")
+	return (*big.Int)(&result), err
+}
+
+// PendingLockedAmountAt returns the wei balance of the given account in the pending state.
+func (ec *Client) PendingLockedAmountAt(ctx context.Context, account common.Address) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_getLockedAmount", account, "pending")
+	return (*big.Int)(&result), err
+}
+
+// PendingLockedAt returns the locked status of the given account in the pending state.
+func (ec *Client) PendingLockedAt(ctx context.Context, account common.Address) (bool, error) {
+	var result bool
+	err := ec.c.CallContext(ctx, &result, "eth_getLocked", account, "pending")
+	return result, err
+}
+
+// PendingLockedAmountAt returns the wei amount available (balance - locked amount (purchased Enterprise UND))
+// of the given account in the pending state.
+func (ec *Client) PendingAvailableAt(ctx context.Context, account common.Address) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_getAvailable", account, "pending")
 	return (*big.Int)(&result), err
 }
 
