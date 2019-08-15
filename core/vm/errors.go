@@ -28,4 +28,5 @@ var (
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
 	ErrInsufficientBalanceForWRKChainTax = errors.New("insufficient balance to pay wrkchain tax")
+	ErrCannotTransferLockedUnd = errors.New("cannot transfer locked und")
 )

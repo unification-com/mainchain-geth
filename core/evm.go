@@ -55,6 +55,7 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		GasLimit:    header.GasLimit,
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
+		HasEnoughUnlocked: HasEnoughUnlocked,
 	}
 }
 
@@ -88,6 +89,15 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
+}
+
+// HasEnoughUnlocked checks whether there are enough available (unlocked) funds in the address'
+// account to make a transfer.
+func HasEnoughUnlocked(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+	if db.GetLocked(addr) {
+		return db.GetAvailable(addr).Cmp(amount) >= 0
+	}
+	return true
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db

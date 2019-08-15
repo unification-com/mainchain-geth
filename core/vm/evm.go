@@ -39,6 +39,8 @@ type (
 	// GetHashFunc returns the nth block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
+
+	HasEnoughUnlockedFunc func(StateDB, common.Address, *big.Int) bool
 )
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
@@ -89,6 +91,8 @@ type Context struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
+
+	HasEnoughUnlocked HasEnoughUnlockedFunc
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -198,12 +202,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	// Fail if we're trying to transfer more UND than is available (unlocked)
+	// NOTE: Should not happen unless there is an attempt to transfer UND
+	// to WRKChain Root, BEACON or DSG contracts
+	if !evm.HasEnoughUnlocked(evm.StateDB, caller.Address(), value) {
+		return nil, gas, ErrCannotTransferLockedUnd
+	}
+
 	// Fail if the account doesn't have sufficient funds to pay the WRKChain Tax
 	// in addition to any potential transfer
 	if addr.String() == common.WRKChainRoot || addr.String() == common.Beacon {
 		// Check if it's Reg or other Tx type
 		// Todo - find more efficient method for this
-		callMethod := hexutil.Encode(input[0:4])
+		callMethod := ""
+		if len(input) >= 4 {
+			callMethod = hexutil.Encode(input[0:4])
+		}
 		isReg := callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 		tax := params.CalculateNetworkTax(isReg)
 		tax.Add(tax, value)
@@ -281,6 +295,30 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
+	}
+
+	// Fail if we're trying to transfer more UND than is available (unlocked)
+	// NOTE: Should not happen unless there is an attempt to transfer UND
+	// to WRKChain Root, BEACON or DSG contracts
+	if !evm.HasEnoughUnlocked(evm.StateDB, caller.Address(), value) {
+		return nil, gas, ErrCannotTransferLockedUnd
+	}
+
+	// Fail if the account doesn't have sufficient funds to pay the WRKChain Tax
+	// in addition to any potential transfer
+	if addr.String() == common.WRKChainRoot || addr.String() == common.Beacon {
+		// Check if it's Reg or other Tx type
+		// Todo - find more efficient method for this
+		callMethod := ""
+		if len(input) >= 4 {
+			callMethod = hexutil.Encode(input[0:4])
+		}
+		isReg := callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
+		tax := params.CalculateNetworkTax(isReg)
+		tax.Add(tax, value)
+		if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), tax) {
+			return nil, gas, ErrInsufficientBalanceForWRKChainTax
+		}
 	}
 
 	var (
