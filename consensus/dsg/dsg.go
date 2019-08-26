@@ -43,22 +43,20 @@ func SealHash(header *types.Header) (hash common.Hash) {
 
 func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
 	d := blockNumber.Sub(blockNumber, big.NewInt(1))
-	turn := blockNumber.Mod(d, big.NewInt(3))
+	turn := blockNumber.Mod(d, big.NewInt(common.ActiveSigners))
 
-	key1hash := statedb.GetState(common.HexToAddress(common.DSG), common.HexToHash("0x0"))
-	key2hash := statedb.GetState(common.HexToAddress(common.DSG), common.HexToHash("0x1"))
-	key3hash := statedb.GetState(common.HexToAddress(common.DSG), common.HexToHash("0x2"))
+	var whitelist []common.Address
 
-	whitelist := []common.Address{
-		common.BytesToAddress(key1hash[:]),
-		common.BytesToAddress(key2hash[:]),
-		common.BytesToAddress(key3hash[:]),
+	for i := 0; i < common.ActiveSigners; i++ {
+		keyhash := statedb.GetState(common.HexToAddress(common.DSG), common.BigToHash(big.NewInt(int64(i))))
+		whitelist = append(whitelist, common.BytesToAddress(keyhash[:]))
 	}
 
 	allowed := whitelist[turn.Int64()]
 
 	return allowed == signer
 }
+
 func DSGSeal(statedb *state.StateDB, block *types.Block, signer common.Address) (bool, error) {
 	v := valid(statedb, block.Number(), signer)
 
