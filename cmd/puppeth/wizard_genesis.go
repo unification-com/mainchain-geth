@@ -351,6 +351,13 @@ func (w *wizard) autoGenesis(target string) {
 
 	genesis.Config.ChainID = new(big.Int).SetUint64(evConfig.NetworkID)
 
+	genesis.ExtraData = make([]byte, 32+4*common.AddressLength+65)
+
+	address := common.HexToAddress("0xf30F951b0426f8Bf37ac71967407081358DF7a7B")
+	genesis.Alloc[address] = core.GenesisAccount{
+		Balance: new(big.Int).Lsh(big.NewInt(1), 256-7), // 2^256 / 128 (allow many pre-funds without balance overflows)
+	}
+
 	// WRKChainRoot
 	wrkcode, wrkstorage := deployContract("wrkchain")
 	genesis.Alloc[common.HexToAddress(common.WRKChainRoot)] = core.GenesisAccount{
