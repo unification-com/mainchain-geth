@@ -6,7 +6,7 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: bd7eb7a46f5d4e6d1abb2b3e1c4694fd71e48cc2537f0191b0ec208d31f56af0
+        privatekey: d53c9ed503e4131259afd4f0d70636eed8bb39d23996055acd0cf8fda350cebb
         password: pass
     container_name: mainchain-validator-devnet-1
     security_opt:
@@ -31,7 +31,7 @@ services:
       - IDENTITY=mainchain-validator-devnet-1
       - NETWORK_ID=50009
       - LISTEN_PORT=30401
-      - UNLOCK_ADDRESS=0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b
+      - UNLOCK_ADDRESS=0x001A320943d4535e93d31E4A65a6e21C5dF375D7
       - NODE_KEY=ev1.txt
       - LOG_LEVEL=9
       - DEVNET_JSON=true # true: load und-devnet-50009.json. false: use --devnet flag & load default hard coded genesis
@@ -43,7 +43,7 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: e043e952a0d20a7160bf3a0f6eaa964102fbca2ebd280bdfe7c776080b350a11
+        privatekey: 794357bf8873d8e61fdbd35c98977077f5ceafb1a20cba79e32b79df77c14271
         password: pass
     container_name: mainchain-validator-devnet-2
     command: /bin/bash -c '/root/bootstrap.sh;'
@@ -66,7 +66,7 @@ services:
       - IDENTITY=mainchain-validator-devnet-2
       - NETWORK_ID=50009
       - LISTEN_PORT=30402
-      - UNLOCK_ADDRESS=0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7
+      - UNLOCK_ADDRESS=0x002A956804bAD8DCad148aBFF71515F9B057F7E0
       - NODE_KEY=ev2.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true
@@ -78,7 +78,7 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: 88fc096c92d58b2ab5e0470da6416c5b02ac5bf065a1ec3106b24cdc0ba7f88b
+        privatekey: b0fb6ce21f0206c08ac33f590a932adac22384ae6e6760f0b8106e5be53cfc8a
         password: pass
     container_name: mainchain-validator-devnet-3
     command: /bin/bash -c '/root/bootstrap.sh;'
@@ -101,7 +101,7 @@ services:
       - IDENTITY=mainchain-validator-devnet-3
       - NETWORK_ID=50009
       - LISTEN_PORT=30403
-      - UNLOCK_ADDRESS=0xcA29F1275470DE81DE6E1Bb53a55228Da676E752
+      - UNLOCK_ADDRESS=0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15
       - NODE_KEY=ev3.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true
@@ -113,7 +113,7 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: 4b33c4e4f549ebda9a384f45c02afdd741207e08ea4b2db110706bfd31679f9c
+        privatekey: 802828fc56b76f465c87fb641bdefc0f6b9690b5648c59a453c351dc300958ff
         password: pass
     container_name: mainchain-validator-devnet-4
     command: /bin/bash -c '/root/bootstrap.sh;'
@@ -136,7 +136,7 @@ services:
       - IDENTITY=mainchain-validator-devnet-4
       - NETWORK_ID=50009
       - LISTEN_PORT=30404
-      - UNLOCK_ADDRESS=0xd71aD3263666e03004479B30CA840a26eaC5b763
+      - UNLOCK_ADDRESS=0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93
       - NODE_KEY=ev4.txt
       - LOG_LEVEL=4
       - DEVNET_JSON=true

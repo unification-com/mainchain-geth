@@ -6,10 +6,10 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: bd7eb7a46f5d4e6d1abb2b3e1c4694fd71e48cc2537f0191b0ec208d31f56af0
+        privatekey: d53c9ed503e4131259afd4f0d70636eed8bb39d23996055acd0cf8fda350cebb
         password: pass
     container_name: mainchain-validator-devnet-1
-    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-1" --password /root/.accountpassword --networkid 50009 --port 30401 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b" --unlock "0xa13A71dfe5cD57F9b67ec6A54AD2Ae7537D7fc3b" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev1.txt" --nodiscover
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-1" --password /root/.accountpassword --networkid 50009 --port 30401 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0x001A320943d4535e93d31E4A65a6e21C5dF375D7" --unlock "0x001A320943d4535e93d31E4A65a6e21C5dF375D7" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev1.txt" --nodiscover
     ports:
       - 30401:30401/tcp
     expose:
@@ -24,10 +24,10 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: e043e952a0d20a7160bf3a0f6eaa964102fbca2ebd280bdfe7c776080b350a11
+        privatekey: 794357bf8873d8e61fdbd35c98977077f5ceafb1a20cba79e32b79df77c14271
         password: pass
     container_name: mainchain-validator-devnet-2
-    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-2" --password /root/.accountpassword --networkid 50009 --port 30402 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7" --unlock "0xb47FD09F1d379Ce2c9BFF59D668cf0B7b994a2B7" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev2.txt" --nodiscover
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-2" --password /root/.accountpassword --networkid 50009 --port 30402 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0x002A956804bAD8DCad148aBFF71515F9B057F7E0" --unlock "0x002A956804bAD8DCad148aBFF71515F9B057F7E0" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev2.txt" --nodiscover
     ports:
       - 30402:30402/tcp
     expose:
@@ -42,10 +42,10 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: 88fc096c92d58b2ab5e0470da6416c5b02ac5bf065a1ec3106b24cdc0ba7f88b
+        privatekey: b0fb6ce21f0206c08ac33f590a932adac22384ae6e6760f0b8106e5be53cfc8a
         password: pass
     container_name: mainchain-validator-devnet-3
-    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-3" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xcA29F1275470DE81DE6E1Bb53a55228Da676E752" --unlock "0xcA29F1275470DE81DE6E1Bb53a55228Da676E752" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev3.txt" --nodiscover
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-3" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15" --unlock "0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev3.txt" --nodiscover
     ports:
       - 30403:30403/tcp
     expose:
@@ -60,10 +60,10 @@ services:
       context: ../
       dockerfile: ./docker/validator/Dockerfile
       args:
-        privatekey: 4b33c4e4f549ebda9a384f45c02afdd741207e08ea4b2db110706bfd31679f9c
+        privatekey: 802828fc56b76f465c87fb641bdefc0f6b9690b5648c59a453c351dc300958ff
         password: pass
     container_name: mainchain-validator-devnet-4
-    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-4" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0xd71aD3263666e03004479B30CA840a26eaC5b763" --unlock "0xd71aD3263666e03004479B30CA840a26eaC5b763" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev4.txt" --nodiscover
+    command: /root/.go/bin/und --verbosity 4 --datadir /root/.und_mainchain --identity "mainchain-validator-devnet-4" --password /root/.accountpassword --networkid 50009 --port 30403 --mine --gasprice "1" --targetgaslimit "420000000" --etherbase "0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93" --unlock "0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93" --syncmode="full" --nodekey="/root/.und_mainchain/bootnode_keys/ev4.txt" --nodiscover
     ports:
       - 30404:30404/tcp
     expose:
