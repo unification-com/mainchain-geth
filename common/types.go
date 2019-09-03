@@ -36,6 +36,8 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
+	// How many EVs are allowed to sign during a rotation period
+	ActiveSigners = 3
 
 	WRKChainRoot           = "0x0000000000000000000000000000000000000087"
 	Beacon                 = "0x0000000000000000000000000000000000000088"
