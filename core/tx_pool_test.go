@@ -1781,8 +1781,6 @@ func wrkChainRootTransaction(key *ecdsa.PrivateKey, nonce uint64, register bool)
 // TestWRKChainRootTransactionsInsufficientFunds tests the correct error message
 // is returned for accounts wiht insufficient funds to pay network tax
 func TestWRKChainRootTransactionsInsufficientFunds(t *testing.T) {
-	t.Parallel()
-
 	// Create the pool to test the status retrievals with
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()))
 	blockchain := &testBlockChain{statedb, 1000000, new(event.Feed)}
@@ -1808,8 +1806,6 @@ func TestWRKChainRootTransactionsInsufficientFunds(t *testing.T) {
 // TestValidWrkChainRootTransactions runs some simple tests to ensure
 // valid WRKChain root Txs are added to the tx pool
 func TestValidWrkChainRootTransactions(t *testing.T) {
-	t.Parallel()
-
 	pool, key := setupTxPool()
 	defer pool.Stop()
 
@@ -1829,5 +1825,44 @@ func TestValidWrkChainRootTransactions(t *testing.T) {
 	tx = wrkChainRootTransaction(key, 3, false)
 	if err := pool.AddRemote(tx); err != nil {
 		t.Error("expected", nil, "got", err)
+	}
+}
+
+// TestValidWrkChainRootTransactionsLockedUnd runs some simple tests to ensure
+// valid WRKChain root Txs are added to the tx pool, with locked UND
+func TestValidWrkChainRootTransactionsLockedUnd(t *testing.T) {
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	tx := wrkChainRootTransaction(key, 2, true)
+	from, _ := deriveSender(tx)
+
+	pool.currentState.SetNonce(from, 1)
+
+	startBalance := big.NewInt(10000)
+	startBalance.Mul(startBalance, big.NewInt(params.Ether))
+
+	pool.currentState.AddBalance(from, startBalance)
+	pool.currentState.AddLockedAmount(from, startBalance)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+
+	tx = wrkChainRootTransaction(key, 3, false)
+	if err := pool.AddRemote(tx); err != nil {
+		t.Error("expected", nil, "got", err)
+	}
+}
+
+func TestTransferringLockedUnd(t *testing.T) {
+	pool, key := setupTxPool()
+	defer pool.Stop()
+
+	account, _ := deriveSender(transaction(0, 0, key))
+	pool.currentState.AddBalance(account, big.NewInt(1000000))
+	pool.currentState.AddLockedAmount(account, big.NewInt(1000000))
+	tx :=  pricedTransaction(0, 100000, big.NewInt(1), key)
+	if err := pool.AddRemote(tx); err != ErrCannotTransferLockedUnd {
+		t.Error("expected", ErrCannotTransferLockedUnd, "got", err)
 	}
 }

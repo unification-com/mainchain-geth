@@ -35,6 +35,8 @@ type testAccount struct {
 	balance *big.Int
 	nonce   uint64
 	code    []byte
+	lockedamount *big.Int
+	locked  bool
 }
 
 // makeTestState create a sample test state to test node-wise reconstruction.
@@ -54,6 +56,14 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 
 		obj.SetNonce(uint64(42 * i))
 		acc.nonce = uint64(42 * i)
+
+		obj.AddLockedAmount(big.NewInt(int64(11 * i)))
+		acc.lockedamount = big.NewInt(int64(11 * i))
+		if i > 0 {
+			acc.locked = true
+		} else {
+			acc.locked = false
+		}
 
 		if i%3 == 0 {
 			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
@@ -83,11 +93,17 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 		if balance := state.GetBalance(acc.address); balance.Cmp(acc.balance) != 0 {
 			t.Errorf("account %d: balance mismatch: have %v, want %v", i, balance, acc.balance)
 		}
+		if lockedamount := state.GetLockedAmount(acc.address); lockedamount.Cmp(acc.lockedamount) != 0 {
+			t.Errorf("account %d: locked amount mismatch: have %v, want %v", i, lockedamount, acc.lockedamount)
+		}
 		if nonce := state.GetNonce(acc.address); nonce != acc.nonce {
 			t.Errorf("account %d: nonce mismatch: have %v, want %v", i, nonce, acc.nonce)
 		}
 		if code := state.GetCode(acc.address); !bytes.Equal(code, acc.code) {
 			t.Errorf("account %d: code mismatch: have %x, want %x", i, code, acc.code)
+		}
+		if locked := state.GetLocked(acc.address); locked != acc.locked {
+			t.Errorf("account %v: locked mismatch: have %v, want %v", i, locked, acc.locked)
 		}
 	}
 }

@@ -5275,6 +5275,30 @@ var methods = function () {
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
+    var getLockedAmount = new Method({
+        name: 'getLockedAmount',
+        call: 'eth_getLockedAmount',
+        params: 2,
+        inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+        outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getLocked = new Method({
+        name: 'getLocked',
+        call: 'eth_getLocked',
+        params: 2,
+        inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+        outputFormatter: formatters.outputBigNumberFormatter
+    });
+
+    var getAvailable = new Method({
+        name: 'getAvailable',
+        call: 'eth_getAvailable',
+        params: 2,
+        inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+        outputFormatter: formatters.outputBigNumberFormatter
+    });
+
     var getStorageAt = new Method({
         name: 'getStorageAt',
         call: 'eth_getStorageAt',
@@ -5433,6 +5457,9 @@ var methods = function () {
 
     return [
         getBalance,
+        getLockedAmount,
+        getLocked,
+        getAvailable,
         getStorageAt,
         getCode,
         getBlock,

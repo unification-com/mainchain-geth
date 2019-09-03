@@ -153,6 +153,7 @@ func TestPrestateTracerCreate2(t *testing.T) {
 		Difficulty:  big.NewInt(0x30000),
 		GasLimit:    uint64(6000000),
 		GasPrice:    big.NewInt(1),
+		HasEnoughUnlocked: core.HasEnoughUnlocked,
 	}
 	alloc := core.GenesisAlloc{}
 
@@ -241,6 +242,7 @@ func TestCallTracer(t *testing.T) {
 				Difficulty:  (*big.Int)(test.Context.Difficulty),
 				GasLimit:    uint64(test.Context.GasLimit),
 				GasPrice:    tx.GasPrice(),
+				HasEnoughUnlocked: core.HasEnoughUnlocked,
 			}
 			statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), test.Genesis.Alloc)
 

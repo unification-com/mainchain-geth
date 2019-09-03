@@ -55,6 +55,8 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		Difficulty:  new(big.Int).Set(header.Difficulty),
 		GasLimit:    header.GasLimit,
 		GasPrice:    new(big.Int).Set(msg.GasPrice()),
+		HasEnoughUnlocked: HasEnoughUnlocked,
+		LockUnd: LockUnd,
 	}
 }
 
@@ -90,8 +92,24 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
 
+// HasEnoughUnlocked checks whether there are enough available (unlocked) funds in the address'
+// account to make a transfer.
+func HasEnoughUnlocked(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+	if db.GetLocked(addr) {
+		return db.GetAvailable(addr).Cmp(amount) >= 0
+	}
+	return true
+}
+
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
+}
+
+func LockUnd(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	// Todo - remove inefficient HexToAddress conversion
+	if sender == common.HexToAddress(common.EnterpriseUndAddress) {
+		db.AddLockedAmount(recipient, amount)
+	}
 }

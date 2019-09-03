@@ -129,6 +129,14 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		}
 		return core.CanTransfer(db, address, amount)
 	}
+	hasEnoughUnlocked := func(db vm.StateDB, address common.Address, amount *big.Int) bool {
+		if initialCall {
+			initialCall = false
+			return true
+		}
+		return core.HasEnoughUnlocked(db, address, amount)
+	}
+	lockUnd := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {}
 	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {}
 	context := vm.Context{
 		CanTransfer: canTransfer,
@@ -141,6 +149,8 @@ func (t *VMTest) newEVM(statedb *state.StateDB, vmconfig vm.Config) *vm.EVM {
 		GasLimit:    t.json.Env.GasLimit,
 		Difficulty:  t.json.Env.Difficulty,
 		GasPrice:    t.json.Exec.GasPrice,
+		HasEnoughUnlocked: hasEnoughUnlocked,
+		LockUnd:     lockUnd,
 	}
 	vmconfig.NoRecursion = true
 	return vm.NewEVM(context, statedb, params.MainnetChainConfig, vmconfig)

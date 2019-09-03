@@ -84,6 +84,10 @@ var (
 
 	// ErrContractCreationNotAllowed is returned if Tx is an attempt to deploy a smart contract.
 	ErrContractCreationNotAllowed = errors.New("contract creation not allowed on mainchain - deploy wrkchain")
+
+	// ErrCannotTransferLockedUnd is returned if a Tx is attempting to transfer more than the
+	// account has available in unlocked UND
+	ErrCannotTransferLockedUnd = errors.New("cannot transfer locked und")
 )
 
 var (
@@ -562,6 +566,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 		return ErrInsufficientFunds
 	}
+
+	// Transactor should also have enough unlocked funds to initiate a UND transfer (including gas costs).
+	// This prevents UND purchased at a fixed price from being used for anything
+	// but network tax. This check is only applicable to non-WRKChain/BEACON Txs, and accounts that are not
+	// currently locked
+	if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 && !tx.IsWrkchainBeaconTransaction() && pool.currentState.GetLocked(from) {
+		return ErrCannotTransferLockedUnd
+	}
+
 	// Ensure the transaction has more gas than the basic tx fee.
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
 	if err != nil {

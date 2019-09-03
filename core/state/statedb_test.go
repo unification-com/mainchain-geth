@@ -46,6 +46,7 @@ func TestUpdateLeaks(t *testing.T) {
 	for i := byte(0); i < 255; i++ {
 		addr := common.BytesToAddress([]byte{i})
 		state.AddBalance(addr, big.NewInt(int64(11*i)))
+		state.AddLockedAmount(addr, big.NewInt(int64(11*i)))
 		state.SetNonce(addr, uint64(42*i))
 		if i%2 == 0 {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
@@ -74,6 +75,7 @@ func TestIntermediateLeaks(t *testing.T) {
 
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
+		state.SetLockedAmount(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 		if i%2 == 0 {
 			state.SetState(addr, common.Hash{i, i, i, 0}, common.Hash{})
@@ -132,6 +134,7 @@ func TestCopy(t *testing.T) {
 	for i := byte(0); i < 255; i++ {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(big.NewInt(int64(i)))
+		obj.AddLockedAmount(big.NewInt(int64(i)))
 		orig.updateStateObject(obj)
 	}
 	orig.Finalise(false)
@@ -145,6 +148,9 @@ func TestCopy(t *testing.T) {
 
 		origObj.AddBalance(big.NewInt(2 * int64(i)))
 		copyObj.AddBalance(big.NewInt(3 * int64(i)))
+
+		origObj.AddLockedAmount(big.NewInt(2 * int64(i)))
+		copyObj.AddLockedAmount(big.NewInt(3 * int64(i)))
 
 		orig.updateStateObject(origObj)
 		copy.updateStateObject(copyObj)
@@ -169,6 +175,30 @@ func TestCopy(t *testing.T) {
 		if want := big.NewInt(4 * int64(i)); copyObj.Balance().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: balance mismatch: have %v, want %v", i, copyObj.Balance(), want)
 		}
+		if want := big.NewInt(3 * int64(i)); origObj.LockedAmount().Cmp(want) != 0 {
+			t.Errorf("orig obj %d: locked amount mismatch: have %v, want %v", i, origObj.LockedAmount(), want)
+		}
+		if want := big.NewInt(4 * int64(i)); copyObj.LockedAmount().Cmp(want) != 0 {
+			t.Errorf("copy obj %d: locked amount mismatch: have %v, want %v", i, copyObj.LockedAmount(), want)
+		}
+
+		if i == 0 {
+			// Should not be locked, as acc 0 has 0 Balance and 0 LockedAmount
+			if want := false; origObj.Locked() != want {
+				t.Errorf("orig obj %d: locked mismatch: have %v, want %v, locked amount %v", i, origObj.Locked(), want, origObj.LockedAmount().String())
+			}
+			if want := false; copyObj.Locked() != want{
+				t.Errorf("copy obj %d: locked  mismatch: have %v, want %v, locked amount %v", i, copyObj.Locked(), want, copyObj.LockedAmount().String())
+			}
+		} else {
+			if want := true; origObj.Locked() != want {
+				t.Errorf("orig obj %d: locked mismatch: have %v, want %v, locked amount %v", i, origObj.Locked(), want, origObj.LockedAmount().String())
+			}
+			if want := true; copyObj.Locked() != want{
+				t.Errorf("copy obj %d: locked  mismatch: have %v, want %v, locked amount %v", i, copyObj.Locked(), want, copyObj.LockedAmount().String())
+			}
+		}
+
 	}
 }
 
@@ -222,6 +252,20 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			name: "AddBalance",
 			fn: func(a testAction, s *StateDB) {
 				s.AddBalance(addr, big.NewInt(a.args[0]))
+			},
+			args: make([]int64, 1),
+		},
+		{
+			name: "SetLockedAmount",
+			fn: func(a testAction, s *StateDB) {
+				s.SetLockedAmount(addr, big.NewInt(a.args[0]))
+			},
+			args: make([]int64, 1),
+		},
+		{
+			name: "AddLockedAmount",
+			fn: func(a testAction, s *StateDB) {
+				s.AddLockedAmount(addr, big.NewInt(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
@@ -393,6 +437,8 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCode", state.GetCode(addr), checkstate.GetCode(addr))
 		checkeq("GetCodeHash", state.GetCodeHash(addr), checkstate.GetCodeHash(addr))
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
+		checkeq("GetLockedAmount", state.GetLockedAmount(addr), checkstate.GetLockedAmount(addr))
+		checkeq("GetLocked", state.GetLocked(addr), checkstate.GetLocked(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
 			state.ForEachStorage(addr, func(key, value common.Hash) bool {
@@ -425,6 +471,7 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(big.Int))
+	s.state.AddLockedAmount(common.Address{}, new(big.Int))
 
 	if len(s.state.journal.dirties) != 1 {
 		c.Fatal("expected one dirty state object")
@@ -441,11 +488,26 @@ func TestCopyOfCopy(t *testing.T) {
 	sdb, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
 	addr := common.HexToAddress("aaaa")
 	sdb.SetBalance(addr, big.NewInt(42))
+	sdb.SetLockedAmount(addr, big.NewInt(32))
 
 	if got := sdb.Copy().GetBalance(addr).Uint64(); got != 42 {
-		t.Fatalf("1st copy fail, expected 42, got %v", got)
+		t.Fatalf("1st balance copy fail, expected 42, got %v", got)
 	}
 	if got := sdb.Copy().Copy().GetBalance(addr).Uint64(); got != 42 {
-		t.Fatalf("2nd copy fail, expected 42, got %v", got)
+		t.Fatalf("2nd balance copy fail, expected 42, got %v", got)
+	}
+
+	if got := sdb.Copy().GetLockedAmount(addr).Uint64(); got != 32 {
+		t.Fatalf("1st locked amount copy fail, expected 32, got %v", got)
+	}
+	if got := sdb.Copy().Copy().GetLockedAmount(addr).Uint64(); got != 32 {
+		t.Fatalf("2nd locked amount copy fail, expected 32, got %v", got)
+	}
+
+	if got := sdb.Copy().GetLocked(addr); got != true {
+		t.Fatalf("1st locked copy fail, expected true, got %v", got)
+	}
+	if got := sdb.Copy().Copy().GetLocked(addr); got != true {
+		t.Fatalf("2nd locked copy fail, expected true, got %v", got)
 	}
 }

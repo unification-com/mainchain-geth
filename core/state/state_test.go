@@ -41,10 +41,12 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
+	obj1.AddLockedAmount(big.NewInt(11))
 	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}))
 	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
+	obj3.SetLockedAmount(big.NewInt(44))
 
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
@@ -54,26 +56,32 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump(false, false, true))
 	want := `{
-    "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
+    "root": "5e416d59f7f2dc5fbccbebf05b781601bf5c96ad7fdbcda38ae79bd53e228628",
     "accounts": {
         "0x0000000000000000000000000000000000000001": {
             "balance": "22",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "locked": true,
+            "lockedAmount": "11"
         },
         "0x0000000000000000000000000000000000000002": {
             "balance": "44",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "locked": true,
+            "lockedAmount": "44"
         },
         "0x0000000000000000000000000000000000000102": {
             "balance": "0",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
-            "code": "03030303030303"
+            "code": "03030303030303",
+            "locked": false,
+            "lockedAmount": "0"
         }
     }
 }`
@@ -154,6 +162,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.SetLockedAmount(big.NewInt(0))
 	so0.suicided = false
 	so0.deleted = false
 	state.setStateObject(so0)
@@ -166,6 +175,7 @@ func TestSnapshot2(t *testing.T) {
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
 	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetLockedAmount(big.NewInt(30))
 	so1.suicided = true
 	so1.deleted = true
 	state.setStateObject(so1)
@@ -192,6 +202,136 @@ func TestSnapshot2(t *testing.T) {
 	}
 }
 
+func TestSimpleUndLocking(t *testing.T) {
+
+	// Create a random state test
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+
+	// Add locked amount, and check it's locked
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(big.NewInt(int64(i + 1)))
+		obj.AddLockedAmount(big.NewInt(int64(i + 1)))
+		stateObj.updateStateObject(obj)
+	}
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+
+		if want := big.NewInt(int64(i + 1)); obj.LockedAmount().Cmp(want) != 0 {
+			t.Errorf("obj %d: locked amount mismatch: have %v, want %v", i, obj.LockedAmount(), want)
+		}
+		if want := true; obj.Locked() != want {
+			t.Errorf("obj %d: locked mismatch: have %v, want %v", i, obj.Locked(), want)
+		}
+	}
+}
+
+func TestLockAndUnlockUnd(t *testing.T) {
+
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	// Add Balance, and Locked Amount (Balance - 1)
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(big.NewInt(int64(i) + 1))
+		stateObj.updateStateObject(obj)
+	}
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
+		if want := false; obj.Locked() != want {
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+		}
+
+		// Add some more balance and locked UND
+		obj.AddBalance(big.NewInt(int64(i) + 1))
+		obj.AddLockedAmount(big.NewInt(int64(i) + 1))
+		stateObj.updateStateObject(obj)
+	}
+
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
+		if want := true; obj.Locked() != want {
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+		}
+		// Sub some balance and locked UND
+		obj.SubBalance(big.NewInt(int64(i) + 1))
+		obj.SubLockedAmount(big.NewInt(int64(i) + 1))
+		stateObj.updateStateObject(obj)
+	}
+
+	stateObj.Finalise(false)
+
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		//t.Logf("balance %v, locked amount %v, available %v, locked %v", obj.Balance(), obj.LockedAmount(), obj.Available(), obj.Locked())
+		if want := false; obj.Locked() != want {
+			t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+		}
+	}
+}
+
+func TestUndAvailable(t *testing.T) {
+	// Create a random state test
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+
+	// Add Balance, and Locked Amount (Balance - 1)
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		obj.AddBalance(big.NewInt(int64(i) + 1))
+		obj.AddLockedAmount(big.NewInt(int64(i)))
+		stateObj.updateStateObject(obj)
+	}
+	stateObj.Finalise(false)
+
+	// All accounts should have 1 Available
+	for i := byte(0); i < 255; i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
+		if want := big.NewInt(int64(1)); obj.Available().Cmp(want) != 0 {
+			t.Errorf("obj %d: amount available mismatch: have %v, want %v", i, obj.Available(), want)
+		}
+	}
+}
+
+func TestCannotLockBelowZero(t *testing.T) {
+	var amount int64 = 20
+	var amountLocked int64 = 10
+	addr := byte(1)
+	stateObj, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
+	obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+	obj.AddBalance(big.NewInt(amount))
+	obj.AddLockedAmount(big.NewInt(amountLocked))
+	stateObj.updateStateObject(obj)
+	stateObj.Finalise(false)
+
+	for i := int64(0); i <= (amountLocked * 2); i++ {
+		obj := stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+		obj.SubLockedAmount(big.NewInt(int64(1)))
+		stateObj.updateStateObject(obj)
+		//t.Logf("available %v, locked amount %v, balance %v, locked %v", obj.Available(), obj.LockedAmount(), obj.Balance(), obj.Locked())
+	}
+	stateObj.Finalise(false)
+
+	obj = stateObj.GetOrNewStateObject(common.BytesToAddress([]byte{addr}))
+	if want := big.NewInt(int64(0)); obj.LockedAmount().Cmp(want) != 0 {
+		t.Errorf("locked amount mismatch: have %v, want %v", obj.LockedAmount(), want)
+	}
+
+	if want := false; obj.Locked() != want {
+		t.Errorf("locked mismatch: have %v, want %v", obj.Locked(), want)
+	}
+
+	if want := big.NewInt(amount); obj.Available().Cmp(want) != 0 {
+		t.Errorf("available mismatch: have %v, want %v", obj.Available(), want)
+	}
+}
+
 func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
@@ -201,6 +341,12 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	}
 	if so0.Nonce() != so1.Nonce() {
 		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
+	}
+	if so0.LockedAmount().Cmp(so1.LockedAmount()) != 0 {
+		t.Fatalf("LockedAmount mismatch: have %v, want %v", so0.LockedAmount(), so1.LockedAmount())
+	}
+	if so0.Locked() != so1.Locked() {
+		t.Fatalf("Locked mismatch: have %v, want %v", so0.Locked(), so1.Locked())
 	}
 	if so0.data.Root != so1.data.Root {
 		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
