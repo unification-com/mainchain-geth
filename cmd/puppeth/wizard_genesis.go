@@ -49,7 +49,9 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(pKey)
 
-	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend)
+	// TODO: take from input/config file
+	minAllowedStakeAmount := big.NewInt(1)
+	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend, minAllowedStakeAmount)
 	if err != nil {
 		fmt.Println("Can't deploy dsg")
 	}
@@ -74,7 +76,9 @@ func dsgContractByConfig(keys EVConfig) ([]byte, map[common.Hash]common.Hash) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
 	transactOpts := bind.NewKeyedTransactor(pKey)
 
-	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend)
+	// TODO: take from input/config file
+	minAllowedStakeAmount := big.NewInt(1)
+	dsgAddress, _, err := dsg.DeployDSG(transactOpts, contractBackend, minAllowedStakeAmount)
 	if err != nil {
 		fmt.Println("Can't deploy dsg")
 	}

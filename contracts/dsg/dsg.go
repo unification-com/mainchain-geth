@@ -18,23 +18,24 @@ package dsg
 import (
 	"github.com/unification-com/mainchain/accounts/abi/bind"
 	"github.com/unification-com/mainchain/common"
-	"github.com/unification-com/mainchain/contracts/dsg/dsgcontract"
+	dsgcontract "github.com/unification-com/mainchain/contracts/dsg/contract"
+	"math/big"
 )
 
 type DSG struct {
-	*dsgcontract.DsgcontractSession
+	*dsgcontract.DSGContractSession
 	contractBackend bind.ContractBackend
 }
 
 
 func NewDSG(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) (*DSG, error) {
-	dsg, err := dsgcontract.NewDsgcontract(contractAddr, contractBackend)
+	dsg, err := dsgcontract.NewDSGContract(contractAddr, contractBackend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DSG{
-		&dsgcontract.DsgcontractSession{
+		&dsgcontract.DSGContractSession{
 			Contract:     dsg,
 			TransactOpts: *transactOpts,
 		},
@@ -43,8 +44,8 @@ func NewDSG(transactOpts *bind.TransactOpts, contractAddr common.Address, contra
 }
 
 
-func DeployDSG(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *DSG, error) {
-	dsgAddr, _, _, err := dsgcontract.DeployDsgcontract(transactOpts, contractBackend)
+func DeployDSG(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend, minAllowedStake *big.Int) (common.Address, *DSG, error) {
+	dsgAddr, _, _, err := dsgcontract.DeployDSGContract(transactOpts, contractBackend, minAllowedStake)
 	if err != nil {
 		return dsgAddr, nil, err
 	}
