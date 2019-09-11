@@ -27,7 +27,7 @@ contract DSGContract {
   }
 
   /*
-    * @dev fallback function for the contract. Assume that the recieved UND should be staked
+    * @dev fallback function for the contract. Assume that the received UND should be staked
     *      so that funds can easily be recovered
     */
   function() payable external {
@@ -80,8 +80,8 @@ contract DSGContract {
 
   }
 
-  function getStaked(address _staker) public view returns(uint256 _amount) {
-    _amount = candidates[_staker];
+  function getStaked(address _candidate) public view returns(uint256 _amount) {
+    _amount = candidates[_candidate];
   }
 
   address public x1;
