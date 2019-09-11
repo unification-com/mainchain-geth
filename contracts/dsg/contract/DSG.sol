@@ -1,6 +1,15 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.5.10;
+
+import "./SafeMath.sol";
 
 contract DSGContract {
+
+  // because it'd be daft not to
+  using SafeMath for uint256;
+
+  uint8 constant private UN_STAKED = 0;
+  uint8 constant private STAKED = 1;
+
   address public x1;
   address public x2;
   address public x3;
@@ -96,6 +105,80 @@ contract DSGContract {
   address public x93;
   address public x94;
   address public x95;
+
+  event StakingEvent(
+      address indexed _candidate,
+      uint256 _amount,
+      uint256 _timestamp,
+      uint8 indexed _stakeUnstake
+  );
+
+  uint256 public MIN_ALLOWED_STAKE;
+  uint256 public totalStaked;
+  mapping(address => uint256) public candidates;
+
+  constructor(uint256 _minAllowedStake) public {
+    require(_minAllowedStake > 0, "min allowed stake must be > 0");
+    MIN_ALLOWED_STAKE = _minAllowedStake;
+  }
+
+  /*
+    * @dev fallback function for the contract. Assume that the recieved UND should be staked
+    *      so that funds can easily be recovered
+    */
+  function() payable external {
+    if(msg.value > 0) {
+      candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+      totalStaked = totalStaked.add(msg.value);
+
+      emit StakingEvent(
+        msg.sender,
+        msg.value,
+        block.timestamp,
+        STAKED
+      );
+    }
+  }
+
+  function stake() payable external {
+
+    require(msg.value >= MIN_ALLOWED_STAKE, "minimum staking amount not met");
+
+    candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+    totalStaked = totalStaked.add(msg.value);
+
+    emit StakingEvent(
+      msg.sender,
+      msg.value,
+      block.timestamp,
+      STAKED
+    );
+  }
+
+  function unStake(uint256 _amount) external {
+    require(_amount > 0, "amount to unstake must be > 0");
+    require(_amount <= candidates[msg.sender], "unstake failed - attempting to unstake more than is staked");
+
+    //should never fail this
+    require(_amount <= totalStaked, "unstake failed - cannot unstake more than totalStaked");
+
+    candidates[msg.sender] = candidates[msg.sender].sub(_amount);
+    totalStaked = totalStaked.sub(_amount);
+
+    emit StakingEvent(
+      msg.sender,
+      _amount,
+      block.timestamp,
+      UN_STAKED
+    );
+
+    msg.sender.transfer(_amount);
+
+  }
+
+  function getStaked(address _staker) view returns(uint256 _amount) {
+    _amount = candidates[_staker];
+  }
 
   function rotate() external {
     if (msg.sender != 0xf30F951b0426f8Bf37ac71967407081358DF7a7B) return;
