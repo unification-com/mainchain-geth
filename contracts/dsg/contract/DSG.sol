@@ -7,19 +7,20 @@ contract DSGContract {
   // because it'd be daft not to
   using SafeMath for uint256;
 
-  uint8 constant private UN_STAKED = 0;
+  uint8 constant private UNSTAKED = 0;
   uint8 constant private STAKED = 1;
 
   event StakingEvent(
       address indexed _candidate,
       uint256 _amount,
-      uint256 _timestamp,
+      uint _timestamp,
       uint8 indexed _stakeUnstake
   );
 
   uint256 public MIN_ALLOWED_STAKE;
   uint256 public totalStaked;
   mapping(address => uint256) public candidates;
+  mapping(address => uint) public lastAction;
 
   constructor(uint256 _minAllowedStake) public {
     require(_minAllowedStake > 0, "min allowed stake must be > 0");
@@ -33,6 +34,7 @@ contract DSGContract {
   function() payable external {
     if(msg.value > 0) {
       candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+      lastAction[msg.sender] = block.timestamp;
       totalStaked = totalStaked.add(msg.value);
 
       emit StakingEvent(
@@ -46,9 +48,11 @@ contract DSGContract {
 
   function stake() payable external {
 
-    require(msg.value >= MIN_ALLOWED_STAKE, "minimum staking amount not met");
+    require(msg.value >= MIN_ALLOWED_STAKE, "stake failed - minimum staking amount not met");
+    require(lastAction[msg.sender] < block.timestamp, "stake failed - one staking action per address per block");
 
     candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+    lastAction[msg.sender] = block.timestamp;
     totalStaked = totalStaked.add(msg.value);
 
     emit StakingEvent(
@@ -60,24 +64,25 @@ contract DSGContract {
   }
 
   function unStake(uint256 _amount) external {
-    require(_amount > 0, "amount to unstake must be > 0");
+    require(_amount > 0, "unstake failed - amount to unstake must be > 0");
     require(_amount <= candidates[msg.sender], "unstake failed - attempting to unstake more than is staked");
+    require(lastAction[msg.sender] < block.timestamp, "unstake failed - one staking action per address per block");
 
     //should never fail this
     require(_amount <= totalStaked, "unstake failed - cannot unstake more than totalStaked");
 
     candidates[msg.sender] = candidates[msg.sender].sub(_amount);
+    lastAction[msg.sender] = block.timestamp;
     totalStaked = totalStaked.sub(_amount);
 
     emit StakingEvent(
       msg.sender,
       _amount,
       block.timestamp,
-      UN_STAKED
+      UNSTAKED
     );
 
     msg.sender.transfer(_amount);
-
   }
 
   function getStaked(address _candidate) public view returns(uint256 _amount) {
