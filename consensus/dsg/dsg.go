@@ -89,3 +89,22 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	v := valid(statedb, block.Number(), signer)
 	return v, nil
 }
+
+
+// The base 0 signer index for a given block number
+// where the genesis block is block 0, and the current Epoch
+func EVSlot(blockNumber uint64) (uint64, uint64) {
+	var numQuarters = uint64(4)
+
+	var blockNumberBase0 = blockNumber - 1
+	var blockIndex = blockNumberBase0 % common.BlocksInEpoch
+	var epochNumber = blockNumberBase0 / common.BlocksInEpoch
+
+	var quadrant = blockIndex / (common.BlocksInEpoch / numQuarters)
+	var numSignersInQuadrant = common.ActiveSigners / numQuarters
+	var factor = common.ActiveSigners / numQuarters
+	var position = blockIndex % numSignersInQuadrant
+	var signerIndex = quadrant * factor + (position + 1)
+
+	return signerIndex - 1, epochNumber
+}
