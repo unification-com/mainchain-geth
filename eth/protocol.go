@@ -32,16 +32,17 @@ import (
 const (
 	eth62 = 62
 	eth63 = 63
+	eth64 = 64
 )
 
 // protocolName is the official short name of the protocol used during capability negotiation.
 const protocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth63}
+var ProtocolVersions = []uint{eth64}
 
 // protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{eth63: 17, eth62: 8}
+var protocolLengths = map[uint]uint64{eth64: 19, eth63: 17, eth62: 8}
 
 const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -62,6 +63,10 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Protocol messages belonging to DSG
+	BlockProposalMsg = 0x11
+	ValidationMsg    = 0x12
 )
 
 type errCode int
