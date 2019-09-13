@@ -11,6 +11,17 @@ import (
 	"math/big"
 )
 
+// BlockProposal represents a block proposal in DSG.
+type BlockProposal struct {
+	Number *big.Int    `json:"number"     gencodec:"required"`
+}
+
+// ValidationMessage represents a validation message in DSG.
+type ValidationMessage struct {
+	Number *big.Int    `json:"number"     gencodec:"required"`
+}
+
+
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
 		header.ParentHash,

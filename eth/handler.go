@@ -385,6 +385,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
+	case msg.Code == ValidationMsg:
+		// Validation Message
+		log.Info("Validation Message received")
+
+	case msg.Code == BlockProposalMsg:
+		// A new block has been proposed
+		log.Info("A new block has been proposed")
+
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
 		// Decode the complex header query
