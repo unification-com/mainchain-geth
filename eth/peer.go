@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/unification-com/mainchain/consensus/dsg"
 	"math/big"
 	"sync"
 	"time"
@@ -265,6 +266,18 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 		p.knownBlocks.Pop()
 	}
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
+}
+
+// SendNewBlockProposal propagates a DSG Block Proposal over the network.
+func (p *peer) SendNewBlockProposal() error {
+	v := dsg.BlockProposal{Number: big.NewInt(1)}
+	return p2p.Send(p.rw, BlockProposalMsg, v)
+}
+
+// SendNewValidationMessage propagates a DSG Validation message over the network.
+func (p *peer) SendNewValidationMessage() error {
+	v := dsg.ValidationMessage{Number: big.NewInt(1)}
+	return p2p.Send(p.rw, ValidationMsg, v)
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
