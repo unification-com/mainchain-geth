@@ -269,15 +269,13 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 }
 
 // SendNewBlockProposal propagates a DSG Block Proposal over the network.
-func (p *peer) SendNewBlockProposal() error {
-	v := dsg.BlockProposal{Number: big.NewInt(1)}
-	return p2p.Send(p.rw, BlockProposalMsg, v)
+func (p *peer) SendNewBlockProposal(blockProposal *dsg.BlockProposal) error {
+	return p2p.Send(p.rw, BlockProposalMsg, blockProposal)
 }
 
 // SendNewValidationMessage propagates a DSG Validation message over the network.
-func (p *peer) SendNewValidationMessage() error {
-	v := dsg.ValidationMessage{Number: big.NewInt(1)}
-	return p2p.Send(p.rw, ValidationMsg, v)
+func (p *peer) SendNewValidationMessage(validationMessage *dsg.ValidationMessage) error {
+	return p2p.Send(p.rw, ValidationMsg, validationMessage)
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
