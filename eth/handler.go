@@ -764,6 +764,16 @@ func (pm *ProtocolManager) BroadcastBlockProposal(blockProposal *dsg.BlockPropos
 	}
 }
 
+// Asynchronously broadcast a BlockProposal to all peers
+func (pm *ProtocolManager) AsyncBroadcastBlockProposal(blockProposal *dsg.BlockProposal) {
+	log.Info("Asynchronously Broadcasting Block Proposal")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		peer.queuedBPs <- blockProposal
+	}
+}
+
 // Synchronously broadcast a ValidationMessage to all peers
 func (pm *ProtocolManager) BroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
 	log.Info("Broadcasting validation message")
@@ -775,6 +785,17 @@ func (pm *ProtocolManager) BroadcastValidationMessage(validationMessage *dsg.Val
 		}
 	}
 }
+
+// Asynchronously broadcast a Validation Message to all peers
+func (pm *ProtocolManager) AsyncBroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
+	log.Info("Asynchronously Broadcasting Validation Message")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		peer.queuedVMs <- validationMessage
+	}
+}
+
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
 // will only announce it's availability (depending what's requested).
