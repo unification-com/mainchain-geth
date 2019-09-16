@@ -752,6 +752,51 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	return nil
 }
 
+// Synchronously broadcast a BlockProposal to all peers
+func (pm *ProtocolManager) BroadcastBlockProposal(blockProposal *dsg.BlockProposal) {
+	log.Info("Broadcasting Block Proposal")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		if err := peer.SendNewBlockProposal(blockProposal); err != nil {
+			log.Info("Error broadcasting block proposal")
+		}
+	}
+}
+
+// Asynchronously broadcast a BlockProposal to all peers
+func (pm *ProtocolManager) AsyncBroadcastBlockProposal(blockProposal *dsg.BlockProposal) {
+	log.Info("Asynchronously Broadcasting Block Proposal")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		peer.queuedBPs <- blockProposal
+	}
+}
+
+// Synchronously broadcast a ValidationMessage to all peers
+func (pm *ProtocolManager) BroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
+	log.Info("Broadcasting validation message")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		if err := peer.SendNewValidationMessage(validationMessage); err != nil {
+			log.Info("Error broadcasting validation message")
+		}
+	}
+}
+
+// Asynchronously broadcast a Validation Message to all peers
+func (pm *ProtocolManager) AsyncBroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
+	log.Info("Asynchronously Broadcasting Validation Message")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		peer.queuedVMs <- validationMessage
+	}
+}
+
+
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
 // will only announce it's availability (depending what's requested).
 func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
