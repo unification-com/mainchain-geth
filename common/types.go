@@ -38,6 +38,8 @@ const (
 	AddressLength = 20
 	// How many EVs are allowed to sign during a rotation period
 	ActiveSigners = 3
+	// How many blocks there are in an Epoch
+	BlocksInEpoch = 24
 
 	WRKChainRoot           = "0x0000000000000000000000000000000000000087"
 	Beacon                 = "0x0000000000000000000000000000000000000088"
