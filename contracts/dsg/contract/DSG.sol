@@ -7,88 +7,6 @@ contract DSGContract {
   // because it'd be daft not to
   using SafeMath for uint256;
 
-  uint8 constant private UNSTAKED = 0;
-  uint8 constant private STAKED = 1;
-
-  event StakingEvent(
-      address indexed _candidate,
-      uint256 _amount,
-      uint _timestamp,
-      uint8 indexed _stakeUnstake
-  );
-
-  uint256 public MIN_ALLOWED_STAKE;
-  uint256 public totalStaked;
-  mapping(address => uint256) public candidates;
-  mapping(address => uint) public lastAction;
-
-  constructor(uint256 _minAllowedStake) public {
-    require(_minAllowedStake > 0, "min allowed stake must be > 0");
-    MIN_ALLOWED_STAKE = _minAllowedStake;
-  }
-
-  /*
-    * @dev fallback function for the contract. Assume that the received UND should be staked
-    *      so that funds can easily be recovered
-    */
-  function() payable external {
-    if(msg.value > 0) {
-      candidates[msg.sender] = candidates[msg.sender].add(msg.value);
-      lastAction[msg.sender] = block.timestamp;
-      totalStaked = totalStaked.add(msg.value);
-
-      emit StakingEvent(
-        msg.sender,
-        msg.value,
-        block.timestamp,
-        STAKED
-      );
-    }
-  }
-
-  function stake() payable external {
-
-    require(msg.value >= MIN_ALLOWED_STAKE, "stake failed - minimum staking amount not met");
-    require(lastAction[msg.sender] < block.timestamp, "stake failed - one staking action per address per block");
-
-    candidates[msg.sender] = candidates[msg.sender].add(msg.value);
-    lastAction[msg.sender] = block.timestamp;
-    totalStaked = totalStaked.add(msg.value);
-
-    emit StakingEvent(
-      msg.sender,
-      msg.value,
-      block.timestamp,
-      STAKED
-    );
-  }
-
-  function unStake(uint256 _amount) external {
-    require(_amount > 0, "unstake failed - amount to unstake must be > 0");
-    require(_amount <= candidates[msg.sender], "unstake failed - attempting to unstake more than is staked");
-    require(lastAction[msg.sender] < block.timestamp, "unstake failed - one staking action per address per block");
-
-    //should never fail this
-    require(_amount <= totalStaked, "unstake failed - cannot unstake more than totalStaked");
-
-    candidates[msg.sender] = candidates[msg.sender].sub(_amount);
-    lastAction[msg.sender] = block.timestamp;
-    totalStaked = totalStaked.sub(_amount);
-
-    emit StakingEvent(
-      msg.sender,
-      _amount,
-      block.timestamp,
-      UNSTAKED
-    );
-
-    msg.sender.transfer(_amount);
-  }
-
-  function getStaked(address _candidate) public view returns(uint256 _amount) {
-    _amount = candidates[_candidate];
-  }
-
   address public x1;
   address public x2;
   address public x3;
@@ -184,6 +102,7 @@ contract DSGContract {
   address public x93;
   address public x94;
   address public x95;
+  address public x96;
 
   function rotate() external {
     if (msg.sender != 0xf30F951b0426f8Bf37ac71967407081358DF7a7B) return;
@@ -282,6 +201,89 @@ contract DSGContract {
     x92 = 0x093Ac3d0AE17AfEF0BaDEEa471EC6466511E9c42;
     x93 = 0x094AF16bd3700e2ee4709776DA4C3334f6163c69;
     x94 = 0x095A2be3334C23EB8D2a7d463027dfD0CdBE21b1;
-    x95 = 0x001A320943d4535e93d31E4A65a6e21C5dF375D7;
+    x95 = 0x096A189F4b28bbaBB141457fb2033C532424499d;
+    x96 = 0x001A320943d4535e93d31E4A65a6e21C5dF375D7;
+  }
+
+  uint8 constant private UNSTAKED = 0;
+  uint8 constant private STAKED = 1;
+
+  event StakingEvent(
+      address indexed _candidate,
+      uint256 _amount,
+      uint _timestamp,
+      uint8 indexed _stakeUnstake
+  );
+
+  uint256 public MIN_ALLOWED_STAKE;
+  uint256 public totalStaked;
+  mapping(address => uint256) public candidates;
+  mapping(address => uint) public lastAction;
+
+  constructor(uint256 _minAllowedStake) public {
+    require(_minAllowedStake > 0, "min allowed stake must be > 0");
+    MIN_ALLOWED_STAKE = _minAllowedStake;
+  }
+
+  /*
+    * @dev fallback function for the contract. Assume that the received UND should be staked
+    *      so that funds can easily be recovered
+    */
+  function() payable external {
+    if(msg.value > 0) {
+      candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+      lastAction[msg.sender] = block.timestamp;
+      totalStaked = totalStaked.add(msg.value);
+
+      emit StakingEvent(
+        msg.sender,
+        msg.value,
+        block.timestamp,
+        STAKED
+      );
+    }
+  }
+
+  function stake() payable external {
+
+    require(msg.value >= MIN_ALLOWED_STAKE, "stake failed - minimum staking amount not met");
+    require(lastAction[msg.sender] < block.timestamp, "stake failed - one staking action per address per block");
+
+    candidates[msg.sender] = candidates[msg.sender].add(msg.value);
+    lastAction[msg.sender] = block.timestamp;
+    totalStaked = totalStaked.add(msg.value);
+
+    emit StakingEvent(
+      msg.sender,
+      msg.value,
+      block.timestamp,
+      STAKED
+    );
+  }
+
+  function unStake(uint256 _amount) external {
+    require(_amount > 0, "unstake failed - amount to unstake must be > 0");
+    require(_amount <= candidates[msg.sender], "unstake failed - attempting to unstake more than is staked");
+    require(lastAction[msg.sender] < block.timestamp, "unstake failed - one staking action per address per block");
+
+    //should never fail this
+    require(_amount <= totalStaked, "unstake failed - cannot unstake more than totalStaked");
+
+    candidates[msg.sender] = candidates[msg.sender].sub(_amount);
+    lastAction[msg.sender] = block.timestamp;
+    totalStaked = totalStaked.sub(_amount);
+
+    emit StakingEvent(
+      msg.sender,
+      _amount,
+      block.timestamp,
+      UNSTAKED
+    );
+
+    msg.sender.transfer(_amount);
+  }
+
+  function getStaked(address _candidate) public view returns(uint256 _amount) {
+    _amount = candidates[_candidate];
   }
 }
