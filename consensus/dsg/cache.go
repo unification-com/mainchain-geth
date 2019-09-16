@@ -16,11 +16,11 @@ func NewCache() *Cache {
 	return cache
 }
 
-func (d *Cache) Insert(msg ValidationMessage) bool {
-	return d.insert(common.ActiveSigners, *msg.Number, msg.BlockHash, *msg.VerifierId, msg.Authorize)
+func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
+	return d.insertValidationMessage(common.ActiveSigners, *msg.Number, msg.BlockHash, *msg.VerifierId, msg.Authorize)
 }
 
-func (d *Cache) insert(totalSigners uint64, blockNumber big.Int, blockHash common.Hash, verifierID big.Int, authorize bool) bool {
+func (d *Cache) insertValidationMessage(totalSigners uint64, blockNumber big.Int, blockHash common.Hash, verifierID big.Int, authorize bool) bool {
 	n := blockNumber.Uint64()
 	v := verifierID.Uint64()
 

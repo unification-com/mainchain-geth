@@ -394,7 +394,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		cache := pm.blockchain.GetDSGCache()
-		acceptBlock := cache.Insert(validationMessage)
+		acceptBlock := cache.InsertValidationMessage(validationMessage)
 		if acceptBlock {
 			log.Info("Accepting block number: %v", validationMessage.Number)
 		}
