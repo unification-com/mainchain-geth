@@ -70,10 +70,23 @@ func dsgContract() ([]byte, map[common.Hash]common.Hash) {
 	return dsgcode, dsgstorage
 }
 
-func dsgContractByConfig(keys EVConfig) ([]byte, map[common.Hash]common.Hash) {
+func dsgContractByConfig(keys EVConfig) ([]byte, map[common.Hash]common.Hash, *big.Int) {
 	pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr := crypto.PubkeyToAddress(pKey.PublicKey)
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}}, 10000000)
+
+	genesisAlloc := map[common.Address]core.GenesisAccount{
+		addr: {
+			Balance: big.NewInt(1000000000),
+		},
+	}
+
+	for _, s := range keys.EVs {
+		genesisAlloc[common.HexToAddress(s.Address)] = core.GenesisAccount{
+			Balance: big.NewInt(1000000000000000000),
+		}
+	}
+
+	contractBackend := backends.NewSimulatedBackend(genesisAlloc, 10000000)
 	transactOpts := bind.NewKeyedTransactor(pKey)
 
 	// TODO: take from input/config file
@@ -90,12 +103,46 @@ func dsgContractByConfig(keys EVConfig) ([]byte, map[common.Hash]common.Hash) {
 	dsgcode, _ := contractBackend.CodeAt(dsgctx, dsgAddress, nil)
 	dsgstorage := make(map[common.Hash]common.Hash)
 
+	stake := big.NewInt(100)
 	for k, s := range keys.EVs {
 		fmt.Println(s)
 
 		dsgstorage[common.BigToHash(big.NewInt(int64(k)))] = common.HexToHash(s.Address)
+
+		privKey, _ := crypto.HexToECDSA(s.Private[2:])
+		evAddr := crypto.PubkeyToAddress(privKey.PublicKey)
+		fmt.Println("evAddr:", evAddr.String())
+
+		transactOpts := bind.NewKeyedTransactor(privKey)
+		transactOpts.Value = stake
+		transactOpts.GasLimit = 10000000
+		transactOpts.GasPrice = big.NewInt(25000)
+		evStake, _ := dsg.NewDSG(transactOpts, dsgAddress, contractBackend)
+		_, _ = evStake.Stake()
+		stake = stake.Sub(stake, big.NewInt(1))
+
+		fmt.Println("stake:", stake.String())
+		contractBackend.Commit()
 	}
-	return dsgcode, dsgstorage
+
+	contractBackend.Commit()
+
+	d := time.Now().Add(1000 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), d)
+	defer cancel()
+
+	f := func(key, val common.Hash) bool {
+		decode := []byte{}
+		trim := bytes.TrimLeft(val.Bytes(), "\x00")
+		rlp.DecodeBytes(trim, &decode)
+		dsgstorage[key] = common.BytesToHash(decode)
+		return true
+	}
+	contractBackend.ForEachStorageAt(ctx, dsgAddress, nil, f)
+
+	contractBalance, _ := contractBackend.BalanceAt(ctx, dsgAddress, nil)
+
+	return dsgcode, dsgstorage, contractBalance
 }
 
 // WRKChainRoot & BEACON
@@ -378,9 +425,9 @@ func (w *wizard) autoGenesis(target string) {
 		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
 	}
 
-	dsgcode, dsgstorage := dsgContractByConfig(evConfig)
+	dsgcode, dsgstorage, contractBalance := dsgContractByConfig(evConfig)
 	genesis.Alloc[common.HexToAddress(common.DSG)] = core.GenesisAccount{
-		Balance: big.NewInt(1), // set to 1 wei to avoid deletion
+		Balance: contractBalance,
 		Code:    dsgcode,
 		Storage: dsgstorage,
 	}
