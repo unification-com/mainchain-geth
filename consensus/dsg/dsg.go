@@ -13,14 +13,18 @@ import (
 
 // BlockProposal represents a block proposal in DSG.
 type BlockProposal struct {
-	Number *big.Int    `json:"number"     gencodec:"required"`
+	Number     *big.Int    `json:"number"     gencodec:"required"`
+	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
+	ProposerId *big.Int    `json:"proposerid" gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
 type ValidationMessage struct {
-	Number *big.Int    `json:"number"     gencodec:"required"`
+	Number     *big.Int    `json:"number"     gencodec:"required"`
+	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
+	VerifierId *big.Int    `json:"verifierId" gencodec:"required"`
+	Authorize  bool        `json:"authorize"  gencodec:"required"`
 }
-
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
