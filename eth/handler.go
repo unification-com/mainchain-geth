@@ -388,6 +388,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == ValidationMsg:
 		// Validation Message
 		log.Info("Validation Message received")
+		var validationMessage dsg.ValidationMessage
+		if err := msg.Decode(&validationMessage); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
+
+		cache := pm.blockchain.GetDSGCache()
+		acceptBlock := cache.Insert(validationMessage)
+		if acceptBlock {
+			log.Info("Accepting block number: %v", validationMessage.Number)
+		}
+
 
 	case msg.Code == BlockProposalMsg:
 		// A new block has been proposed
