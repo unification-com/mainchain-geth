@@ -36,6 +36,9 @@ const (
 	HashLength = 32
 	// AddressLength is the expected length of the address
 	AddressLength = 20
+
+	// How many Validators in the initial pool
+	ValidatorPool = 3 //96
 	// How many EVs are allowed to sign during a rotation period
 	ActiveSigners = 3
 	// How many blocks there are in an Epoch
