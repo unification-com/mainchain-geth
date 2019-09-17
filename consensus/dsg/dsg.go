@@ -112,9 +112,7 @@ func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numQuarters uint64
 // The base 0 signer index for a given block number
 // where the genesis block is block 0, and the current Epoch
 func EVSlot(blockNumber uint64) (uint64, uint64) {
-	var numQuarters = uint64(4)
-
-	return EVSlotInternal(blockNumber, common.BlocksInEpoch, numQuarters, common.ActiveSigners)
+	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.EpochSubdivisions, common.ActiveSigners)
 }
 
 // GetValidatorPool is the exported function for getValidatorPool

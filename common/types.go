@@ -43,6 +43,8 @@ const (
 	ActiveSigners = 3
 	// How many blocks there are in an Epoch
 	BlocksInEpoch = 24
+	// Epoch subdivisions (Normally, this will be 4, but use 1 with 3 EVs)
+	EpochSubdivisions = 1
 
 	WRKChainRoot           = "0x0000000000000000000000000000000000000087"
 	Beacon                 = "0x0000000000000000000000000000000000000088"
