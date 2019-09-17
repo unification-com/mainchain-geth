@@ -399,10 +399,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			log.Info("Accepting block number: %v", validationMessage.Number)
 		}
 
-
 	case msg.Code == BlockProposalMsg:
 		// A new block has been proposed
 		log.Info("A new block has been proposed")
+		var proposal dsg.BlockProposal
+		if err := msg.Decode(&proposal); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:

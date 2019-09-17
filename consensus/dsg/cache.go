@@ -7,14 +7,21 @@ import (
 
 type Cache struct {
 	Validations map[uint64]map[uint64]bool `json:"validations"`
+	Proposals []BlockProposal `json:"proposals"`
 }
 
 func NewCache() *Cache {
 	cache := &Cache{
 		Validations: map[uint64]map[uint64]bool{},
+		Proposals: make([]BlockProposal, 100),
 	}
 	return cache
 }
+
+func (d *Cache) InsertBlockProposal(bp BlockProposal) {
+	d.Proposals = append(d.Proposals, bp)
+}
+
 
 func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
 	return d.insertValidationMessage(common.ActiveSigners, *msg.Number, msg.BlockHash, *msg.VerifierId, msg.Authorize)
