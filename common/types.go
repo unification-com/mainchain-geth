@@ -39,8 +39,8 @@ const (
 
 	// How many Validators in the initial pool
 	ValidatorPool = 3 //96
-	// How many EVs are allowed to sign during a rotation period
-	ActiveSigners = 3
+	// The number of EVs that are signing during a Round
+	NumSignersInRound = 3
 	// How many blocks there are in an Epoch
 	BlocksInEpoch = 24
 	// Epoch subdivisions (Normally, this will be 4, but use 1 with 3 EVs)
