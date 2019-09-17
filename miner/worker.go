@@ -535,6 +535,7 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			statedb, _ := w.chain.State()
+			_ = dsg.ProposeBlock(task.block, w.config.Etherbase)
 			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
 			if !v {
 				log.Info("The author may not produce this block")

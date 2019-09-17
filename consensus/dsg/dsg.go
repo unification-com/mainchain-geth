@@ -5,6 +5,7 @@ import (
 	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/rlp"
 	"golang.org/x/crypto/sha3"
 	"io"
@@ -14,9 +15,12 @@ import (
 
 // BlockProposal represents a block proposal in DSG.
 type BlockProposal struct {
-	Number     *big.Int    `json:"number"     gencodec:"required"`
-	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
-	ProposerId *big.Int    `json:"proposerid" gencodec:"required"`
+	Number        *big.Int       `json:"number"     gencodec:"required"`
+	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
+	ProposerId    *big.Int       `json:"proposerid" gencodec:"required"`
+	ProposedBlock *types.Block    `json:"block"      gencodec:"required"`
+	Signature     common.Hash    `json:"sig"        gencodec:"required"`
+	Address       common.Address `json:"address"        gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
@@ -50,6 +54,30 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
+func ProposeBlock(block *types.Block, proposer common.Address) error {
+
+	log.Info("Propose block #", "num", block.Number().String())
+
+	proposedBlock := BlockProposal {
+		Number: block.Number(),
+		BlockHash: block.Hash(),
+		ProposerId: getTurn(block.Number()),
+		ProposedBlock: block,
+		Signature: common.Hash{}, // TODO - sign
+		Address: proposer,
+	}
+
+	encodedBlockProposal, err := rlp.EncodeToBytes(proposedBlock)
+
+	if err != nil {
+		log.Error("ProposeBlock encode error:", err)
+	}
+
+	log.Info("encodedBlockProposal", "enc", encodedBlockProposal)
+
+	return nil
+}
+
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 	encodeSigHeader(hasher, header)
@@ -57,9 +85,14 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
+func getTurn(blockNumber *big.Int) *big.Int {
 	d := blockNumber.Sub(blockNumber, big.NewInt(1))
 	turn := blockNumber.Mod(d, big.NewInt(common.NumSignersInRound))
+	return turn
+}
+
+func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
+	turn := getTurn(blockNumber)
 
 	var whitelist []common.Address
 
