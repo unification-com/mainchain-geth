@@ -59,11 +59,11 @@ func SealHash(header *types.Header) (hash common.Hash) {
 
 func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
 	d := blockNumber.Sub(blockNumber, big.NewInt(1))
-	turn := blockNumber.Mod(d, big.NewInt(common.NumSignersinRound))
+	turn := blockNumber.Mod(d, big.NewInt(common.NumSignersInRound))
 
 	var whitelist []common.Address
 
-	for i := 0; i < common.NumSignersinRound; i++ {
+	for i := 0; i < common.NumSignersInRound; i++ {
 		keyhash := statedb.GetState(common.HexToAddress(common.DSG), common.BigToHash(big.NewInt(int64(i))))
 		whitelist = append(whitelist, common.BytesToAddress(keyhash[:]))
 	}
@@ -112,7 +112,7 @@ func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numQuarters uint64
 // The base 0 signer index for a given block number
 // where the genesis block is block 0, and the current Epoch
 func EVSlot(blockNumber uint64) (uint64, uint64) {
-	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersinRound)
+	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }
 
 // GetValidatorPool is the exported function for getValidatorPool
