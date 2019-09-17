@@ -86,6 +86,7 @@ type ProtocolManager struct {
 	minedBlockSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
+	etherbase common.Address
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
@@ -100,7 +101,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCheckpoint, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cacheLimit int, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCheckpoint, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cacheLimit int, whitelist map[uint64]common.Hash, etherbase common.Address) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkID:   networkID,
@@ -113,6 +114,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+		etherbase:   etherbase,
 	}
 	if mode == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
@@ -406,6 +408,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&proposal); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
+
+		valid := proposal.ValidateBlockProposal()
+		verifierId := dsg.VerifierIdFromEtherbase(pm.etherbase)
+
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:verifierId, Authorize:valid}
+		pm.AsyncBroadcastValidationMessage(&vm)
+
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
