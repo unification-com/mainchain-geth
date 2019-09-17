@@ -37,14 +37,14 @@ const (
 	// AddressLength is the expected length of the address
 	AddressLength = 20
 
-	// How many Validators in the initial pool
-	ValidatorPool = 3 //96
-	// How many EVs are allowed to sign during a rotation period
-	ActiveSigners = 3
+	// How many Validators in the initial Epoch pool. Mainnet default = 96
+	NumSignersInEpoch = 3 //96
+	// How many EVs are allowed to sign during a rotation round. Mainnet default = 24
+	NumSignersInRound = 3
 	// How many blocks there are in an Epoch
 	BlocksInEpoch = 24
 	// Epoch subdivisions (Normally, this will be 4, but use 1 with 3 EVs)
-	EpochSubdivisions = 1
+	NumberOfRounds = 1
 
 	WRKChainRoot           = "0x0000000000000000000000000000000000000087"
 	Beacon                 = "0x0000000000000000000000000000000000000088"
