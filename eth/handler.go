@@ -407,6 +407,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
+		valid := proposal.ValidateBlockProposal()
+		verifierId := dsg.VerifierIdFromEtherbase(pm.etherbase)
+
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:verifierId, Authorize:valid}
+		pm.AsyncBroadcastValidationMessage(&vm)
+
+
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
 		// Decode the complex header query

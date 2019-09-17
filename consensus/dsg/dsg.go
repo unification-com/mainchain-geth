@@ -156,3 +156,8 @@ func getValidatorPool() []common.Address {
 
 	return validatorPool
 }
+
+func VerifierIdFromEtherbase(etherbase common.Address) *big.Int {
+	// TODO: Implement me
+	return big.NewInt(1)
+}
