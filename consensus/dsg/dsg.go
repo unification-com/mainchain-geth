@@ -53,7 +53,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
-func ProposeBlock(block *types.Block, proposer common.Address) error {
+func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
 	log.Info("Propose block #", "num", block.Number().String())
 
@@ -66,15 +66,7 @@ func ProposeBlock(block *types.Block, proposer common.Address) error {
 		Address:       proposer,
 	}
 
-	encodedBlockProposal, err := rlp.EncodeToBytes(proposedBlock)
-
-	if err != nil {
-		log.Error("ProposeBlock encode error:", err)
-	}
-
-	log.Info("encodedBlockProposal", "enc", encodedBlockProposal)
-
-	return nil
+	return proposedBlock
 }
 
 func SealHash(header *types.Header) (hash common.Hash) {
