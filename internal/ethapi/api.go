@@ -585,6 +585,17 @@ func (s *PublicBlockChainAPI) GetAvailable(ctx context.Context, address common.A
 	return (*hexutil.Big)(state.GetAvailable(address)), state.Error()
 }
 
+// GetStaked returns the amount of staked wei for the given address in the state of the
+// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetStaked(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(state.GetStaked(address)), state.Error()
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`
@@ -595,6 +606,7 @@ type AccountResult struct {
 	StorageHash  common.Hash     `json:"storageHash"`
 	StorageProof []StorageResult `json:"storageProof"`
 	LockedAmount *hexutil.Big    `json:"lockedAmount"`
+	Staked       *hexutil.Big    `json:"staked"`
 }
 type StorageResult struct {
 	Key   string       `json:"key"`
@@ -650,6 +662,7 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
 		LockedAmount: (*hexutil.Big)(state.GetLockedAmount(address)),
+		Staked:       (*hexutil.Big)(state.GetStaked(address)),
 	}, state.Error()
 }
 
