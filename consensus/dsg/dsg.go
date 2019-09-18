@@ -18,9 +18,9 @@ type BlockProposal struct {
 	Number        *big.Int       `json:"number"     gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
 	ProposerId    *big.Int       `json:"proposerid" gencodec:"required"`
-	ProposedBlock *types.Block    `json:"block"      gencodec:"required"`
+	ProposedBlock *types.Block   `json:"block"      gencodec:"required"`
 	Signature     common.Hash    `json:"sig"        gencodec:"required"`
-	Address       common.Address `json:"address"        gencodec:"required"`
+	Address       common.Address `json:"address"    gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
@@ -58,13 +58,13 @@ func ProposeBlock(block *types.Block, proposer common.Address) error {
 
 	log.Info("Propose block #", "num", block.Number().String())
 
-	proposedBlock := BlockProposal {
-		Number: block.Number(),
-		BlockHash: block.Hash(),
-		ProposerId: getTurn(block.Number()),
+	proposedBlock := BlockProposal{
+		Number:        block.Number(),
+		BlockHash:     block.Hash(),
+		ProposerId:    getTurn(block.Number()),
 		ProposedBlock: block,
-		Signature: common.Hash{}, // TODO - sign
-		Address: proposer,
+		Signature:     common.Hash{}, // TODO - sign
+		Address:       proposer,
 	}
 
 	encodedBlockProposal, err := rlp.EncodeToBytes(proposedBlock)
@@ -179,7 +179,7 @@ func getValidatorPool() []common.Address {
 		return false
 	})
 
-    top := stakedWallets[:common.NumSignersInEpoch]
+	top := stakedWallets[:common.NumSignersInEpoch]
 
 	for _, t := range top {
 		validatorPool = append(validatorPool, t.Address)
