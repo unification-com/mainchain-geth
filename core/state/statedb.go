@@ -256,6 +256,15 @@ func (self *StateDB) GetLocked(addr common.Address) bool {
 	return false
 }
 
+// Retrieve the staked amount from the given address or 0 if object not found
+func (self *StateDB) GetStaked(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Staked()
+	}
+	return common.Big0
+}
+
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -416,6 +425,29 @@ func (self *StateDB) SetLockedAmount(addr common.Address, amount *big.Int) {
 	}
 }
 
+// AddStaked adds amount to the account's staked associated with addr.
+func (self *StateDB) AddStaked(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddStaked(amount)
+	}
+}
+
+// SubStaked subtracts amount from the account's staked associated with addr.
+func (self *StateDB) SubStaked(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubStaked(amount)
+	}
+}
+
+func (self *StateDB) SetStaked(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetStaked(amount)
+	}
+}
+
 func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -452,10 +484,12 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 		prev:        stateObject.suicided,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 		prevlockedamount: new(big.Int).Set(stateObject.LockedAmount()),
+		prevstaked: new(big.Int).Set(stateObject.Staked()),
 	})
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
 	stateObject.data.LockedAmount = new(big.Int)
+	stateObject.data.Staked = new(big.Int)
 
 	return true
 }
@@ -566,6 +600,7 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 		newObj.setLockedAmount(prev.data.LockedAmount)
+		newObj.setStaked(prev.data.Staked)
 	}
 }
 
