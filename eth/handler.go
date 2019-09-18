@@ -84,6 +84,7 @@ type ProtocolManager struct {
 	txsCh         chan core.NewTxsEvent
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
+	proposalBlockSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 	etherbase common.Address
@@ -259,7 +260,9 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
 	go pm.minedBroadcastLoop()
+	go pm.proposedBroadcastLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -886,6 +889,15 @@ func (pm *ProtocolManager) minedBroadcastLoop() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
 			pm.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			pm.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+		}
+	}
+}
+
+// Block proposal broadcast loop
+func (pm *ProtocolManager) proposedBroadcastLoop() {
+	for obj := range pm.proposalBlockSub.Chan() {
+		if ev, ok := obj.Data.(core.NewBlockProposalEvent); ok {
+			pm.AsyncBroadcastBlockProposal(ev.BlockProposal)
 		}
 	}
 }
