@@ -526,5 +526,10 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
 }
 
+// StakeUnstake processes staking/unstaking calls
+func (evm *EVM) StakeUnstake(caller ContractRef, data []byte,  gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	return nil, gas, nil
+}
+
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
