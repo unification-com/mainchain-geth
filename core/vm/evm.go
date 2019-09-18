@@ -42,6 +42,8 @@ type (
 
 	HasEnoughUnlockedFunc func(StateDB, common.Address, *big.Int) bool
 	LockUndFunc func(StateDB, common.Address, common.Address, *big.Int)
+	StakeFunc func(StateDB, common.Address, *big.Int)
+    UnStakeFunc func(StateDB, common.Address, *big.Int)
 )
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
@@ -95,6 +97,8 @@ type Context struct {
 
 	HasEnoughUnlocked HasEnoughUnlockedFunc
 	LockUnd LockUndFunc
+	Stake StakeFunc
+	UnStake UnStakeFunc
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
