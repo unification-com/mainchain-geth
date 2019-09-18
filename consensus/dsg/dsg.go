@@ -146,8 +146,3 @@ func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numQuarters uint64
 func EVSlot(blockNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }
-
-func VerifierIdFromEtherbase(etherbase common.Address) *big.Int {
-	// TODO: Implement me
-	return big.NewInt(1)
-}

@@ -1,6 +1,7 @@
 package dsg
 
 import (
+	"fmt"
 	"github.com/unification-com/mainchain/common"
 	"math/big"
 	"sort"
@@ -52,4 +53,17 @@ func getValidatorPool() []common.Address {
 	}
 
 	return validatorPool
+}
+
+func EVIdFromEtherbase(etherbase common.Address) uint64 {
+	stakedWallets := getStakedWallets()
+
+	for index, stakedWallet := range stakedWallets {
+		fmt.Println(index)
+		if stakedWallet.Address == etherbase {
+			return uint64(index)
+		}
+	}
+
+	return uint64(0)
 }
