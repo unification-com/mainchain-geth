@@ -60,7 +60,7 @@ func ProposeBlock(block *types.Block, proposer common.Address) error {
 	proposedBlock := BlockProposal{
 		Number:        block.Number(),
 		BlockHash:     block.Hash(),
-		ProposerId:    getTurn(block.Number()),
+		ProposerId:    big.NewInt(int64(EVIdFromEtherbase(proposer))),
 		ProposedBlock: block,
 		Signature:     common.Hash{}, // TODO - sign
 		Address:       proposer,

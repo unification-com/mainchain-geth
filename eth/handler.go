@@ -410,9 +410,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		valid := proposal.ValidateBlockProposal()
-		verifierId := dsg.VerifierIdFromEtherbase(pm.etherbase)
+		verifierId := dsg.EVIdFromEtherbase(pm.etherbase)
 
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:verifierId, Authorize:valid}
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:big.NewInt(int64(verifierId)), Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
 
 
