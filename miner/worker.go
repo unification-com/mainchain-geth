@@ -535,6 +535,9 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			statedb, _ := w.chain.State()
+			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
+			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+
 			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
 			if !v {
 				log.Info("The author may not produce this block")

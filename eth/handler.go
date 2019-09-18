@@ -84,6 +84,7 @@ type ProtocolManager struct {
 	txsCh         chan core.NewTxsEvent
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
+	proposalBlockSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 	etherbase common.Address
@@ -259,7 +260,9 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
+	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
 	go pm.minedBroadcastLoop()
+	go pm.proposedBroadcastLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -395,10 +398,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
+		log.Info("Validation Result:", "from", validationMessage.VerifierId.String(), "authorise", validationMessage.Authorize)
+
 		cache := pm.blockchain.GetDSGCache()
 		acceptBlock := cache.InsertValidationMessage(validationMessage)
 		if acceptBlock {
-			log.Info("Accepting block number: %v", validationMessage.Number)
+			log.Info("Accepting block number", "num", validationMessage.Number)
 		}
 
 	case msg.Code == BlockProposalMsg:
@@ -410,9 +415,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		valid := proposal.ValidateBlockProposal()
-		verifierId := dsg.VerifierIdFromEtherbase(pm.etherbase)
+		verifierId := dsg.EVIdFromEtherbase(pm.etherbase)
 
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:verifierId, Authorize:valid}
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:big.NewInt(int64(verifierId)), Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
 
 
@@ -886,6 +891,15 @@ func (pm *ProtocolManager) minedBroadcastLoop() {
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
 			pm.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			pm.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+		}
+	}
+}
+
+// Block proposal broadcast loop
+func (pm *ProtocolManager) proposedBroadcastLoop() {
+	for obj := range pm.proposalBlockSub.Chan() {
+		if ev, ok := obj.Data.(core.NewBlockProposalEvent); ok {
+			pm.AsyncBroadcastBlockProposal(ev.BlockProposal)
 		}
 	}
 }

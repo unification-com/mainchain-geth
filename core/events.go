@@ -18,6 +18,7 @@ package core
 
 import (
 	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/consensus/dsg"
 	"github.com/unification-com/mainchain/core/types"
 )
 
@@ -31,6 +32,9 @@ type PendingLogsEvent struct {
 
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
+
+// NewBlockProposalEvent
+type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }

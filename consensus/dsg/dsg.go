@@ -5,18 +5,21 @@ import (
 	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/rlp"
 	"golang.org/x/crypto/sha3"
 	"io"
 	"math/big"
-	"sort"
 )
 
 // BlockProposal represents a block proposal in DSG.
 type BlockProposal struct {
-	Number     *big.Int    `json:"number"     gencodec:"required"`
-	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
-	ProposerId *big.Int    `json:"proposerid" gencodec:"required"`
+	Number        *big.Int       `json:"number"     gencodec:"required"`
+	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
+	ProposerId    *big.Int       `json:"proposerid" gencodec:"required"`
+	ProposedBlock *types.Block   `json:"block"      gencodec:"required"`
+	Signature     common.Hash    `json:"sig"        gencodec:"required"`
+	Address       common.Address `json:"address"    gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
@@ -50,6 +53,22 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 }
 
+func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
+
+	log.Info("Propose block #", "num", block.Number().String())
+
+	proposedBlock := BlockProposal{
+		Number:        block.Number(),
+		BlockHash:     block.Hash(),
+		ProposerId:    big.NewInt(int64(EVIdFromEtherbase(proposer))),
+		ProposedBlock: block,
+		Signature:     common.Hash{}, // TODO - sign
+		Address:       proposer,
+	}
+
+	return proposedBlock
+}
+
 func SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 	encodeSigHeader(hasher, header)
@@ -57,9 +76,14 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
+func getTurn(blockNumber *big.Int) *big.Int {
 	d := blockNumber.Sub(blockNumber, big.NewInt(1))
 	turn := blockNumber.Mod(d, big.NewInt(common.NumSignersInRound))
+	return turn
+}
+
+func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
+	turn := getTurn(blockNumber)
 
 	var whitelist []common.Address
 
@@ -113,49 +137,4 @@ func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numQuarters uint64
 // where the genesis block is block 0, and the current Epoch
 func EVSlot(blockNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
-}
-
-// GetValidatorPool is the exported function for getValidatorPool
-func GetValidatorPool() []common.Address {
-	return getValidatorPool()
-}
-
-// getValidatorPool calculates the top staked wallet addresses and returns
-// a list of addresses of size common.NumSignersInEpoch
-func getValidatorPool() []common.Address {
-
-	validatorPool := make([]common.Address, 0)
-
-	// ToDo - get from stateDb, or create snapshot
-	stakedWallets := []struct {
-		Address common.Address
-		Staked  *big.Int
-	}{
-		{common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"), big.NewInt(10)},
-		{common.HexToAddress("0x002A956804bAD8DCad148aBFF71515F9B057F7E0"), big.NewInt(1000)},
-		{common.HexToAddress("0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15"), big.NewInt(100)},
-		{common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93"), big.NewInt(1)},
-	}
-
-	sort.Slice(stakedWallets, func(i, j int) bool {
-		cmp := stakedWallets[i].Staked.Cmp(stakedWallets[j].Staked)
-		//reverse order
-		if cmp == 1 {
-			return true
-		}
-		return false
-	})
-
-    top := stakedWallets[:common.NumSignersInEpoch]
-
-	for _, t := range top {
-		validatorPool = append(validatorPool, t.Address)
-	}
-
-	return validatorPool
-}
-
-func VerifierIdFromEtherbase(etherbase common.Address) *big.Int {
-	// TODO: Implement me
-	return big.NewInt(1)
 }
