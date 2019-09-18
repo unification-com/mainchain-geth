@@ -77,6 +77,7 @@ type Message interface {
 
 	IsWrkchainBeaconMessage() bool
 	IsRegisterWrkchainBeaconMsg() bool
+	IsStakeUnstakeMessage() bool
 }
 
 // IntrinsicGas computes the 'intrinsic gas' for a message with the given data.
@@ -246,7 +247,14 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+
+		if msg.IsStakeUnstakeMessage() {
+			// Siphon off to a special EVM function
+			log.Info("TransitionDb - StakeUnstake msg", "sender", sender.Address().Hex(), "val", st.value.String(), "data", st.data)
+			ret, st.gas, vmerr = evm.StakeUnstake(sender, st.data, st.gas, st.value)
+		} else {
+			ret, st.gas, vmerr = evm.Call(sender, st.to(), st.data, st.gas, st.value)
+		}
 	}
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
