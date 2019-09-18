@@ -120,7 +120,8 @@ type CallMsg struct {
 	Value                       *big.Int       // amount of wei sent along with the call
 	Data                        []byte         // input data, usually an ABI-encoded contract method invocation
 	IsWrkchainBeaconMessage     bool           // check whether msg is of WRKChain Tx type
-	IsRegisterWrkchainBeaconMsg bool           // check whether mes is WRKChain registration
+	IsRegisterWrkchainBeaconMsg bool           // check whether msg is WRKChain registration
+	IsStakeUnstakeMessage       bool           // check whether msg is Stake/Unstake
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by

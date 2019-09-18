@@ -149,6 +149,15 @@ func (tx *Transaction) IsRegisterWRKChainBeaconTx() bool {
 	return callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 }
 
+// IsStakeUnstakeTransaction checks if a Tx is a WRKChain
+// Root or Beacon Tx
+func (tx *Transaction) IsStakeUnstakeTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+	return tx.To().String() == common.DSG
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
@@ -266,6 +275,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		data:             tx.data.Payload,
 		checkNonce:       true,
 		isWrkChainBeacon: tx.IsWrkchainBeaconTransaction(),
+		isStakeUnstake:   tx.IsStakeUnstakeTransaction(),
 	}
 
 	var err error
@@ -467,14 +477,19 @@ type Message struct {
 	data             []byte
 	checkNonce       bool
 	isWrkChainBeacon bool
+	isStakeUnstake   bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
 	isWrkChainBeacon := false
+	isStakeUnstake := false
 
 	if to != nil {
 		if to.String() == common.WRKChainRoot || to.String() == common.Beacon {
 			isWrkChainBeacon = true
+		}
+		if to.String() == common.DSG {
+			isStakeUnstake = true
 		}
 	}
 
@@ -488,6 +503,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		data:             data,
 		checkNonce:       checkNonce,
 		isWrkChainBeacon: isWrkChainBeacon,
+		isStakeUnstake:   isStakeUnstake,
 	}
 }
 
@@ -500,6 +516,7 @@ func (m Message) Nonce() uint64                 { return m.nonce }
 func (m Message) Data() []byte                  { return m.data }
 func (m Message) CheckNonce() bool              { return m.checkNonce }
 func (m Message) IsWrkchainBeaconMessage() bool { return m.isWrkChainBeacon }
+func (m Message) IsStakeUnstakeMessage() bool   { return m.isStakeUnstake }
 func (m Message) IsRegisterWrkchainBeaconMsg() bool {
 	if !m.isWrkChainBeacon {
 		return false
