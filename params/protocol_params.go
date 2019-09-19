@@ -90,6 +90,12 @@ const (
 
 	WRKChainRootTax         uint64 = 1 // Tax in UND.
 	WRKChainRegFee          uint64 = 1000 // Cost to register a WRKChain
+
+	// Staking
+
+	StakeAction             uint8 = 1
+	UnStakeAction           uint8 = 2
+	MinStakeAmount          uint64 = 100 // in UND
 )
 
 var (
@@ -108,4 +114,11 @@ func CalculateNetworkTax(isReg bool) *big.Int {
 	tax := new(big.Int).SetUint64(taxUnd)
 	tax.Mul(tax, big.NewInt(Ether))
 	return tax
+}
+
+func CalculateMinStakeAmount() *big.Int {
+	minStakeUnd := MinStakeAmount
+	minStake := new(big.Int).SetUint64(minStakeUnd)
+	minStake.Mul(minStake, big.NewInt(Ether))
+	return minStake
 }

@@ -155,7 +155,7 @@ func (tx *Transaction) IsStakeUnstakeTransaction() bool {
 	if tx.To() == nil {
 		return false
 	}
-	return tx.To().String() == common.DSG
+	return tx.To().String() == common.StakeAddress
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -488,7 +488,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		if to.String() == common.WRKChainRoot || to.String() == common.Beacon {
 			isWrkChainBeacon = true
 		}
-		if to.String() == common.DSG {
+		if to.String() == common.StakeAddress {
 			isStakeUnstake = true
 		}
 	}
