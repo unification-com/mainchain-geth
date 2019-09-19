@@ -4,7 +4,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/log"
-	"math/big"
 )
 
 const (
@@ -17,13 +16,13 @@ type Cache struct {
 	proposals *lru.ARCCache
 }
 
-type Validation struct {
+type ValidationKey struct {
 	BlockNum uint64      `json:"blocknum"`
 	Proposer uint64      `json:"proposer"`
 	Validator uint64     `json:"validator"`
 }
 
-type Proposal struct {
+type ProposalKey struct {
 	BlockNum uint64      `json:"blocknum"`
 	Proposer uint64      `json:"proposer"`
 }
@@ -44,7 +43,7 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 	n := bp.Number.Uint64()
 	p := bp.ProposerId.Uint64()
 
-	key := Proposal{
+	key := ProposalKey{
 		BlockNum: n,
 		Proposer: p,
 	}
@@ -54,47 +53,49 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 
 
 func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
-	return d.insertValidationMessage(common.NumSignersInRound, *msg.Number, msg.BlockHash, *msg.VerifierId, *msg.ProposerId, msg.Authorize)
+	return d.insertValidationMessage(msg)
 }
 
-func (d *Cache) insertValidationMessage(totalSigners uint64, blockNumber big.Int, blockHash common.Hash, verifierID big.Int, proposerId big.Int, authorize bool) bool {
-	n := blockNumber.Uint64()
-	v := verifierID.Uint64()
-	p := proposerId.Uint64()
+func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
+	n := msg.Number.Uint64()
+	v := msg.VerifierId.Uint64()
+	p := msg.ProposerId.Uint64()
 
-	log.Info("insertValidationMessage", "block", n, "proposer", p, "validator", v, "authorise", authorize)
-
-	key := Validation{
+	key := ValidationKey{
 		BlockNum: n,
 		Validator: v,
 		Proposer: p,
 	}
 
-    d.validations.Add(key, authorize)
+	log.Info("insertValidationMessage", "block", key.BlockNum, "proposer", key.Proposer, "validator", key.Validator, "authorise", msg.Authorize)
+    d.validations.Add(key, msg)
 
-	return d.acceptBlock(totalSigners, n, p)
+	return d.acceptBlock(n, p)
 }
 
-func (d *Cache) acceptBlock(totalSigners uint64, blockNum uint64, proposerId uint64) bool {
+func (d *Cache) acceptBlock(blockNum uint64, proposerId uint64) bool {
 	acks := float64(0)
 
-	for i := uint64(0); i < totalSigners; i++ {
-		lookupKey := Validation{
+	for i := uint64(0); i < common.NumSignersInRound; i++ {
+		lookupKey := ValidationKey{
 			BlockNum: blockNum,
 			Validator: i,
 			Proposer: proposerId,
 		}
-		if a, ok := d.validations.Get(lookupKey); ok {
-			if a == true {
-				acks = acks + 1
+
+		var validationMessage ValidationMessage
+		if vm, ok := d.validations.Get(lookupKey); ok {
+			if validationMessage, ok = vm.(ValidationMessage); ok {
+				if validationMessage.Authorize == true {
+					acks = acks + 1
+				}
 			}
 		}
 	}
 
-	totalSignersFloat := float64(totalSigners)
+	totalSignersFloat := float64(common.NumSignersInRound)
 	requirement := float64(2) / totalSignersFloat
 	acknowledges := acks / totalSignersFloat
 	log.Info("acceptBlock", "num", blockNum, "proposer", proposerId, "acks", acks)
 	return acknowledges >= requirement
-
 }
