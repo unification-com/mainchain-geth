@@ -28,6 +28,7 @@ type ValidationMessage struct {
 	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
 	VerifierId *big.Int    `json:"verifierId" gencodec:"required"`
 	ProposerId *big.Int    `json:"proposerId" gencodec:"required"`
+	Signature common.Hash  `json:"signature"  gencodec:"required"`
 	Authorize  bool        `json:"authorize"  gencodec:"required"`
 }
 
