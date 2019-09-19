@@ -1,9 +1,11 @@
 package dsg
 
 import (
+	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/log"
+	"math/big"
 )
 
 const (
@@ -51,6 +53,21 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 	d.proposals.Add(key, bp)
 }
 
+func (d *Cache) GetBlockProposal(blockNum *big.Int, proposerId *big.Int) (BlockProposal, error) {
+	key := ProposalKey{
+		BlockNum: blockNum.Uint64(),
+		Proposer: proposerId.Uint64(),
+	}
+
+	var blockProposal BlockProposal
+	if bp, ok := d.proposals.Get(key); ok {
+		if blockProposal, ok = bp.(BlockProposal); ok {
+			return blockProposal, nil
+		}
+	}
+	
+	return blockProposal, errors.New("could not retrieve block proposal from cache")
+}
 
 func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
 	return d.insertValidationMessage(msg)
