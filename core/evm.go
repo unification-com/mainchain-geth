@@ -59,6 +59,7 @@ func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author
 		LockUnd: LockUnd,
 		Stake: Stake,
 		UnStake: UnStake,
+		CanUnstake: CanUnstake,
 	}
 }
 
@@ -124,4 +125,10 @@ func Stake(db vm.StateDB, sender common.Address, amount *big.Int) {
 func UnStake(db vm.StateDB, sender common.Address, amount *big.Int) {
 	db.SubStaked(sender, amount)
 	db.AddBalance(sender, amount)
+}
+
+// HasEnoughUnlocked checks whether there are enough available (unlocked) funds in the address'
+// account to make a transfer.
+func CanUnstake(db vm.StateDB, addr common.Address, amount *big.Int) bool {
+	return db.GetStaked(addr).Cmp(amount) >= 0
 }

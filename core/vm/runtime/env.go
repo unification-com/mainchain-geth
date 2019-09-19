@@ -39,6 +39,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 		LockUnd: core.LockUnd,
 		Stake: core.Stake,
 		UnStake: core.UnStake,
+		CanUnstake: core.CanUnstake,
 	}
 
 	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)

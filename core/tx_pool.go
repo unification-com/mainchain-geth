@@ -88,6 +88,20 @@ var (
 	// ErrCannotTransferLockedUnd is returned if a Tx is attempting to transfer more than the
 	// account has available in unlocked UND
 	ErrCannotTransferLockedUnd = errors.New("cannot transfer locked und")
+
+	ErrNoStakeAction = errors.New("no staking action supplied in input")
+
+	ErrUnknownStakeAction = errors.New("unknown staking action - expecting 1 or 2")
+
+	ErrInvalidStakeActionLength = errors.New("invalid stake action length - should be 1 byte")
+
+	ErrCannotUnstakeMoreThanStaked = errors.New("cannot unstake more than is staked")
+
+	ErrMinStakeAmountNotMet = errors.New("minimum stake amount not met")
+
+	ErrInsufficientFundsToStake = errors.New("insufficient funds for gas * price + stake value")
+
+	ErrInsufficientAvailableToStake = errors.New("insufficient available unlocked und for gas * price + stake value")
 )
 
 var (
@@ -556,23 +570,76 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		// first check if it's a WRKChain Tx, and return a meaningful error
-		if tx.IsWrkchainBeaconTransaction() {
-			return ErrInsufficientFundsForWRKChainTax
-		}
-		return ErrInsufficientFunds
-	}
 
-	// Transactor should also have enough unlocked funds to initiate a UND transfer (including gas costs).
-	// This prevents UND purchased at a fixed price from being used for anything
-	// but network tax. This check is only applicable to non-WRKChain/BEACON Txs, and accounts that are not
-	// currently locked
-	if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 && !tx.IsWrkchainBeaconTransaction() && pool.currentState.GetLocked(from) {
-		return ErrCannotTransferLockedUnd
+	// Staking and Unstaking need some special attention
+	if tx.IsStakeUnstakeTransaction() {
+		log.Info("Tx Pool: validateTx: Submitted Stake/Unstake Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "amount", tx.Value().String(), "action", tx.Data())
+
+		// reject if no input was sent
+		if len(tx.Data()) == 0 {
+			return ErrNoStakeAction
+		}
+		// reject if too much input was sent
+		if len(tx.Data()) > 1 {
+			return ErrInvalidStakeActionLength
+		}
+		stakeAction := tx.Data()[0]
+		isValidStakeAction := false
+
+		// reject if the input action is not stake/unstake
+		if stakeAction == params.StakeAction || stakeAction == params.UnStakeAction {
+			isValidStakeAction = true
+		}
+
+		if !isValidStakeAction {
+			return ErrUnknownStakeAction
+		}
+
+		if stakeAction == params.UnStakeAction {
+			// check if the amount currently staked is >= amount requested to be unstaked
+			if pool.currentState.GetStaked(from).Cmp(tx.Value()) < 0 {
+				return ErrCannotUnstakeMoreThanStaked
+			}
+		}
+		if stakeAction == params.StakeAction {
+			// reject if the staked amount does not meet min stake requirement
+			if tx.Value().Cmp(params.CalculateMinStakeAmount()) < 0 {
+				return ErrMinStakeAmountNotMet
+			}
+			// reject if the account does not have sufficient Balance to stake
+			if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+				return ErrInsufficientFundsToStake
+			}
+			// reject if the account does not have sufficient Available funds to stake
+			// i.e. they have a large balance, but it is Locked for paying WRKChain/BEACON
+			// taxes (after an Enterprise UND purchase)
+			if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 {
+				return ErrInsufficientAvailableToStake
+			}
+		}
+		//good to go.
+		log.Info("staking Tx OK", "stakeAction", stakeAction)
+	} else {
+		// All other Transaction types
+
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			// first check if it's a WRKChain Tx, and return a meaningful error
+			if tx.IsWrkchainBeaconTransaction() {
+				return ErrInsufficientFundsForWRKChainTax
+			}
+			return ErrInsufficientFunds
+		}
+
+		// Transactor should also have enough unlocked funds to initiate a UND transfer (including gas costs).
+		// This prevents UND purchased at a fixed price from being used for anything
+		// but network tax. This check is only applicable to non-WRKChain/BEACON Txs, and accounts that are not
+		// currently locked
+		if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 && !tx.IsWrkchainBeaconTransaction() && pool.currentState.GetLocked(from) {
+			return ErrCannotTransferLockedUnd
+		}
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.
