@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	inmMemoryProposals  = 64 // Number of recent block proposals to keep in memory
+	inmMemoryProposals  = 96 // Number of recent block proposals to keep in memory
 	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
 )
 
@@ -21,6 +21,11 @@ type Validation struct {
 	BlockNum uint64      `json:"blocknum"`
 	Proposer uint64      `json:"proposer"`
 	Validator uint64     `json:"validator"`
+}
+
+type Proposal struct {
+	BlockNum uint64      `json:"blocknum"`
+	Proposer uint64      `json:"proposer"`
 }
 
 func NewCache() *Cache {
@@ -36,7 +41,15 @@ func NewCache() *Cache {
 }
 
 func (d *Cache) InsertBlockProposal(bp BlockProposal) {
-	d.proposals.Add(bp.BlockHash, bp)
+	n := bp.Number.Uint64()
+	p := bp.ProposerId.Uint64()
+
+	key := Proposal{
+		BlockNum: n,
+		Proposer: p,
+	}
+
+	d.proposals.Add(key, bp)
 }
 
 
