@@ -1,25 +1,40 @@
 package dsg
 
 import (
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
 	"math/big"
 )
 
+const (
+	inmMemoryProposals  = 64 // Number of recent block proposals to keep in memory
+	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
+)
+
 type Cache struct {
-	Validations map[uint64]map[uint64]bool `json:"validations"`
-	Proposals []BlockProposal `json:"proposals"`
+	validations *lru.ARCCache
+	proposals *lru.ARCCache
+}
+
+type Validation struct {
+	BlockNum uint64      `json:"blocknum"`
+	Validator uint64     `json:"validator"`
 }
 
 func NewCache() *Cache {
+
+	validations, _ := lru.NewARC(inMemoryValidations)
+	proposals, _ := lru.NewARC(inmMemoryProposals)
+
 	cache := &Cache{
-		Validations: map[uint64]map[uint64]bool{},
-		Proposals: make([]BlockProposal, 100),
+		validations: validations,
+		proposals: proposals,
 	}
 	return cache
 }
 
 func (d *Cache) InsertBlockProposal(bp BlockProposal) {
-	d.Proposals = append(d.Proposals, bp)
+	d.proposals.Add(bp.BlockHash, bp)
 }
 
 
@@ -31,16 +46,28 @@ func (d *Cache) insertValidationMessage(totalSigners uint64, blockNumber big.Int
 	n := blockNumber.Uint64()
 	v := verifierID.Uint64()
 
-	_, ok := d.Validations[n]
-	if ! ok {
-		d.Validations[n] = map[uint64]bool{}
+	key := Validation{
+		BlockNum: n,
+		Validator: v,
 	}
-	d.Validations[n][v] = authorize
 
+    d.validations.Add(key, authorize)
+
+	return d.acceptBlock(totalSigners, n)
+}
+
+func (d *Cache) acceptBlock(totalSigners uint64, blockNum uint64) bool {
 	acks := float64(0)
-	for _, value := range d.Validations[n] {
-		if value == true {
-			acks = acks + 1
+
+	for i := uint64(0); i < totalSigners; i++ {
+		lookupKey := Validation{
+			BlockNum: blockNum,
+			Validator: i,
+		}
+		if a, ok := d.validations.Get(lookupKey); ok {
+			if a == true {
+				acks = acks + 1
+			}
 		}
 	}
 
