@@ -3,6 +3,7 @@ package dsg
 import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/log"
 	"math/big"
 )
 
@@ -18,6 +19,7 @@ type Cache struct {
 
 type Validation struct {
 	BlockNum uint64      `json:"blocknum"`
+	Proposer uint64      `json:"proposer"`
 	Validator uint64     `json:"validator"`
 }
 
@@ -39,30 +41,35 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 
 
 func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
-	return d.insertValidationMessage(common.NumSignersInRound, *msg.Number, msg.BlockHash, *msg.VerifierId, msg.Authorize)
+	return d.insertValidationMessage(common.NumSignersInRound, *msg.Number, msg.BlockHash, *msg.VerifierId, *msg.ProposerId, msg.Authorize)
 }
 
-func (d *Cache) insertValidationMessage(totalSigners uint64, blockNumber big.Int, blockHash common.Hash, verifierID big.Int, authorize bool) bool {
+func (d *Cache) insertValidationMessage(totalSigners uint64, blockNumber big.Int, blockHash common.Hash, verifierID big.Int, proposerId big.Int, authorize bool) bool {
 	n := blockNumber.Uint64()
 	v := verifierID.Uint64()
+	p := proposerId.Uint64()
+
+	log.Info("insertValidationMessage", "block", n, "proposer", p, "validator", v, "authorise", authorize)
 
 	key := Validation{
 		BlockNum: n,
 		Validator: v,
+		Proposer: p,
 	}
 
     d.validations.Add(key, authorize)
 
-	return d.acceptBlock(totalSigners, n)
+	return d.acceptBlock(totalSigners, n, p)
 }
 
-func (d *Cache) acceptBlock(totalSigners uint64, blockNum uint64) bool {
+func (d *Cache) acceptBlock(totalSigners uint64, blockNum uint64, proposerId uint64) bool {
 	acks := float64(0)
 
 	for i := uint64(0); i < totalSigners; i++ {
 		lookupKey := Validation{
 			BlockNum: blockNum,
 			Validator: i,
+			Proposer: proposerId,
 		}
 		if a, ok := d.validations.Get(lookupKey); ok {
 			if a == true {
@@ -74,7 +81,7 @@ func (d *Cache) acceptBlock(totalSigners uint64, blockNum uint64) bool {
 	totalSignersFloat := float64(totalSigners)
 	requirement := float64(2) / totalSignersFloat
 	acknowledges := acks / totalSignersFloat
-	accept := acknowledges >= requirement
+	log.Info("acceptBlock", "num", blockNum, "proposer", proposerId, "acks", acks)
+	return acknowledges >= requirement
 
-	return accept
 }
