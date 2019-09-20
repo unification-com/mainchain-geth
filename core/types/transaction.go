@@ -301,6 +301,9 @@ func (tx *Transaction) Cost() *big.Int {
 	if tx.IsWrkchainBeaconTransaction() {
 		return tx.WRKChainTax()
 	}
+	if tx.IsStakeUnstakeTransaction() {
+		return tx.StakeUnstakeCost()
+	}
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
@@ -315,6 +318,21 @@ func (tx *Transaction) WRKChainTax() *big.Int {
 	tax := params.CalculateNetworkTax(tx.IsRegisterWRKChainBeaconTx())
 	tax.Add(tax, tx.data.Amount)
 	return tax
+}
+
+// StakeUnstakeCost calculates the cost of Staking/Unstaking.
+// For Staking, the Amount is taken into consideration to ensure the
+// account has enough funds to Stake. For Unstaking, only the gas price is
+// calculated, since we're just shifting UND from Staked to Balance
+func (tx *Transaction) StakeUnstakeCost() *big.Int {
+	stakeAction := tx.Data()[0]
+	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
+
+	if stakeAction == params.StakeAction {
+		total.Add(total, tx.data.Amount)
+	}
+
+	return total
 }
 
 // WRKChainRootMethod returns the WRKChain Root or Beacon method called
