@@ -643,7 +643,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
+	intrGas, err := IntrinsicGas(tx.Data(), false, true)
 	if err != nil {
 		return err
 	}
@@ -1247,14 +1247,37 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			pool.all.Remove(hash)
 			log.Trace("Removed old queued transaction", "hash", hash)
 		}
+
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-			log.Trace("Removed unpayable queued transaction", "hash", hash)
+		// For non-WRKChain Txs, we need to get the AmountAvailable, which takes into
+		// account any Enterprise purchased "Locked" UND, since Locked UND are not
+		// available for standard UND Transfers or DSG Staking
+
+		// First, drop any non-WRKChain/BEACON Txs, using the Available amount as the costLimit
+		standardDrops, _ := list.Filter(pool.currentState.GetAvailable(addr), pool.currentMaxGas)
+		standardDropsCounter := 0
+		for _, tx := range standardDrops {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable queued non-WRKChain/BEACON transaction", "hash", hash, "currentMaxGas", pool.currentMaxGas, "acc", pool.currentState.GetBalance(addr).String())
+				standardDropsCounter = standardDropsCounter + 1
+			}
 		}
-		queuedNofundsMeter.Mark(int64(len(drops)))
+
+		// Next, check WRKChain/BEACON Txs, using the full Balance amount for costLimit
+		wrkchainDrops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		wrkchainDropsCounter := 0
+		for _, tx := range wrkchainDrops {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable queued WRKChain/BEACON transaction", "hash", hash, "currentMaxGas", pool.currentMaxGas, "acc", pool.currentState.GetBalance(addr).String())
+				wrkchainDropsCounter = wrkchainDropsCounter + 1
+			}
+		}
+
+		queuedNofundsMeter.Mark(int64(standardDropsCounter + wrkchainDropsCounter))
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
@@ -1279,10 +1302,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			queuedRateLimitMeter.Mark(int64(len(caps)))
 		}
 		// Mark all the items dropped as removed
-		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
-		queuedCounter.Dec(int64(len(forwards) + len(drops) + len(caps)))
+		pool.priced.Removed(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps))
+		queuedCounter.Dec(int64(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps)))
 		if pool.locals.contains(addr) {
-			localCounter.Dec(int64(len(forwards) + len(drops) + len(caps)))
+			localCounter.Dec(int64(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps)))
 		}
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -1439,24 +1462,64 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
-		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			log.Trace("Removed unpayable pending transaction", "hash", hash)
-			pool.all.Remove(hash)
-		}
-		pool.priced.Removed(len(olds) + len(drops))
-		pendingNofundsMeter.Mark(int64(len(drops)))
 
-		for _, tx := range invalids {
-			hash := tx.Hash()
-			log.Trace("Demoting pending transaction", "hash", hash)
-			pool.enqueueTx(hash, tx)
+		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
+		// For non-WRKChain Txs, we need to get the AmountAvailable, which takes into
+		// account any Enterprise purchased "Locked" UND, since Locked UND are not
+		// available for standard UND Transfers or DSG Staking
+
+		// First, drop any non-WRKChain/BEACON Txs, using the Available amount as the costLimit
+		standardDrops, standardInvalids := list.Filter(pool.currentState.GetAvailable(addr), pool.currentMaxGas)
+		standardDropsCounter := 0
+		standardInvalidsCounter := 0
+		for _, tx := range standardDrops {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable pending non-WRKChain/BEACON transaction", "hash", hash)
+				standardDropsCounter = standardDropsCounter + 1
+			}
 		}
-		pendingCounter.Dec(int64(len(olds) + len(drops) + len(invalids)))
+
+		// Next, check WRKChain/BEACON Txs, using the full Balance amount for costLimit
+		wrkchainDrops, wrkchainInvalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		wrkchainDropsCounter := 0
+		wrkchainInvalidsCounter := 0
+		for _, tx := range wrkchainDrops {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable pending WRKChain/BEACON transaction", "hash", hash)
+				wrkchainDropsCounter = wrkchainDropsCounter + 1
+			}
+		}
+
+		pool.priced.Removed(len(olds) + standardDropsCounter + wrkchainDropsCounter)
+		pendingNofundsMeter.Mark(int64(standardDropsCounter + wrkchainDropsCounter))
+
+		// Go through standard Tx invalids
+		for _, tx := range standardInvalids {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				log.Trace("Demoting pending non-WRKChain/BEACON transaction", "hash", hash)
+				pool.enqueueTx(hash, tx)
+				standardInvalidsCounter = standardInvalidsCounter + 1
+			}
+		}
+
+		// Go through WRKChain Tx invalids
+		for _, tx := range wrkchainInvalids {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				log.Trace("Demoting pending WRKChain/BEACON transaction", "hash", hash)
+				pool.enqueueTx(hash, tx)
+				wrkchainInvalidsCounter = wrkchainInvalidsCounter + 1
+			}
+		}
+
+		pendingCounter.Dec(int64(len(olds) + standardDropsCounter + standardInvalidsCounter + wrkchainDropsCounter + wrkchainInvalidsCounter))
 		if pool.locals.contains(addr) {
-			localCounter.Dec(int64(len(olds) + len(drops) + len(invalids)))
+			localCounter.Dec(int64(len(olds) + standardDropsCounter + standardInvalidsCounter + wrkchainDropsCounter + wrkchainInvalidsCounter))
 		}
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {
