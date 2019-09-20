@@ -261,8 +261,18 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
-		// TODO: need to check vmerr for stake related balance errors
-		if vmerr == vm.ErrInsufficientBalance || (vmerr == vm.ErrCannotTransferLockedUnd || vmerr == vm.ErrInsufficientBalanceForWRKChainTax) {
+		switch vmerr {
+		case vm.ErrInsufficientBalance:
+			return nil, 0, false, vmerr
+		case vm.ErrCannotTransferLockedUnd:
+			return nil, 0, false, vmerr
+		case vm.ErrInsufficientBalanceForWRKChainTax:
+			return nil, 0, false, vmerr
+		case vm.ErrInsufficientBalanceForStake:
+			return nil, 0, false, vmerr
+		case vm.ErrCannotStakeLockedUnd:
+			return nil, 0, false, vmerr
+		case vm.ErrCannotUnstakeMoreThanStaked:
 			return nil, 0, false, vmerr
 		}
 	}
