@@ -398,12 +398,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
-		log.Info("Validation Result:", "from", validationMessage.VerifierId.String(), "authorise", validationMessage.Authorize)
+		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.ProposerId.Uint64(), "validator", validationMessage.VerifierId.String(), "authorise", validationMessage.Authorize)
 
 		cache := pm.blockchain.GetDSGCache()
 		acceptBlock := cache.InsertValidationMessage(validationMessage)
 		if acceptBlock {
-			log.Info("Accepting block number", "num", validationMessage.Number)
+			log.Info("Accepting block", "num", validationMessage.Number, "proposer", validationMessage.ProposerId)
 		}
 
 	case msg.Code == BlockProposalMsg:
@@ -417,7 +417,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		valid := proposal.ValidateBlockProposal()
 		verifierId := dsg.EVIdFromEtherbase(pm.etherbase)
 
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:big.NewInt(int64(verifierId)), Authorize:valid}
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:big.NewInt(int64(verifierId)), ProposerId: proposal.ProposerId, Signature: common.Hash{}, Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
 
 

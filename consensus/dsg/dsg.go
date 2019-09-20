@@ -16,7 +16,7 @@ import (
 type BlockProposal struct {
 	Number        *big.Int       `json:"number"     gencodec:"required"`
 	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
-	ProposerId    *big.Int       `json:"proposerid" gencodec:"required"`
+	ProposerId    *big.Int       `json:"proposerId" gencodec:"required"`
 	ProposedBlock *types.Block   `json:"block"      gencodec:"required"`
 	Signature     common.Hash    `json:"sig"        gencodec:"required"`
 	Address       common.Address `json:"address"    gencodec:"required"`
@@ -27,6 +27,8 @@ type ValidationMessage struct {
 	Number     *big.Int    `json:"number"     gencodec:"required"`
 	BlockHash  common.Hash `json:"blockHash"  gencodec:"required"`
 	VerifierId *big.Int    `json:"verifierId" gencodec:"required"`
+	ProposerId *big.Int    `json:"proposerId" gencodec:"required"`
+	Signature common.Hash  `json:"signature"  gencodec:"required"`
 	Authorize  bool        `json:"authorize"  gencodec:"required"`
 }
 
