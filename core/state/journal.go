@@ -97,6 +97,7 @@ type (
 		prev        bool // whether account had already suicided
 		prevbalance *big.Int
 		prevlockedamount *big.Int
+		prevstaked *big.Int
 	}
 
 	// Changes to individual accounts.
@@ -105,6 +106,10 @@ type (
 		prev    *big.Int
 	}
 	lockedAmountChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	stakedChange struct {
 		account *common.Address
 		prev    *big.Int
 	}
@@ -161,6 +166,7 @@ func (ch suicideChange) revert(s *StateDB) {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
 		obj.setLockedAmount(ch.prevlockedamount)
+		obj.setStaked(ch.prevstaked)
 	}
 }
 
@@ -190,6 +196,14 @@ func (ch lockedAmountChange) revert(s *StateDB) {
 }
 
 func (ch lockedAmountChange) dirtied() *common.Address {
+	return ch.account
+}
+
+func (ch stakedChange) revert(s *StateDB) {
+	s.getStateObject(*ch.account).setStaked(ch.prev)
+}
+
+func (ch stakedChange) dirtied() *common.Address {
 	return ch.account
 }
 

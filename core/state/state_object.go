@@ -103,6 +103,7 @@ type Account struct {
 	Root         common.Hash // merkle root of the storage trie
 	CodeHash     []byte
 	LockedAmount *big.Int
+	Staked       *big.Int
 }
 
 // newObject creates a state object.
@@ -115,6 +116,9 @@ func newObject(db *StateDB, address common.Address, data Account) *stateObject {
 	}
 	if data.LockedAmount == nil {
 		data.LockedAmount = new(big.Int)
+	}
+	if data.Staked == nil {
+		data.Staked = new(big.Int)
 	}
 	return &stateObject{
 		db:            db,
@@ -358,6 +362,43 @@ func (s *stateObject) setLockedAmount(amount *big.Int) {
 	s.data.LockedAmount = amount
 }
 
+// AddStaked removes amount from c's staked amount.
+// It is used when staking and moving UND from Balance to Staked.
+func (s *stateObject) AddStaked(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Sign() == 0 {
+		if s.empty() {
+			s.touch()
+		}
+
+		return
+	}
+	s.SetStaked(new(big.Int).Add(s.Staked(), amount))
+}
+
+// SubStaked removes amount from c's staked amount.
+// It is used when un-staking and moving UND from Staked to Balance
+func (s *stateObject) SubStaked(amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	s.SetStaked(new(big.Int).Sub(s.Staked(), amount))
+}
+
+func (s *stateObject) SetStaked(amount *big.Int) {
+	s.db.journal.append(stakedChange{
+		account: &s.address,
+		prev:    new(big.Int).Set(s.data.Staked),
+	})
+	s.setStaked(amount)
+}
+
+func (s *stateObject) setStaked(amount *big.Int) {
+	s.data.Staked = amount
+}
+
+
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (s *stateObject) ReturnGas(gas *big.Int) {}
 
@@ -450,6 +491,10 @@ func (s *stateObject) Locked() bool {
 
 func (s *stateObject) Available() *big.Int {
 	return new(big.Int).Sub(s.data.Balance, s.data.LockedAmount)
+}
+
+func (s *stateObject) Staked() *big.Int {
+	return s.data.Staked
 }
 
 // Never called, but must be present to allow stateObject to be used

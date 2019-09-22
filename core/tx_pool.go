@@ -88,6 +88,20 @@ var (
 	// ErrCannotTransferLockedUnd is returned if a Tx is attempting to transfer more than the
 	// account has available in unlocked UND
 	ErrCannotTransferLockedUnd = errors.New("cannot transfer locked und")
+
+	ErrNoStakeAction = errors.New("no staking action supplied in input")
+
+	ErrUnknownStakeAction = errors.New("unknown staking action - expecting 1 or 2")
+
+	ErrInvalidStakeActionLength = errors.New("invalid stake action length - should be 1 byte")
+
+	ErrCannotUnstakeMoreThanStaked = errors.New("cannot unstake more than is staked")
+
+	ErrMinStakeAmountNotMet = errors.New("minimum stake amount not met")
+
+	ErrInsufficientFundsToStake = errors.New("insufficient funds for gas * price + stake value")
+
+	ErrInsufficientAvailableToStake = errors.New("insufficient available unlocked und for gas * price + stake value")
 )
 
 var (
@@ -556,27 +570,80 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		// first check if it's a WRKChain Tx, and return a meaningful error
-		if tx.IsWrkchainBeaconTransaction() {
-			return ErrInsufficientFundsForWRKChainTax
-		}
-		return ErrInsufficientFunds
-	}
 
-	// Transactor should also have enough unlocked funds to initiate a UND transfer (including gas costs).
-	// This prevents UND purchased at a fixed price from being used for anything
-	// but network tax. This check is only applicable to non-WRKChain/BEACON Txs, and accounts that are not
-	// currently locked
-	if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 && !tx.IsWrkchainBeaconTransaction() && pool.currentState.GetLocked(from) {
-		return ErrCannotTransferLockedUnd
+	// Staking and Unstaking need some special attention
+	if tx.IsStakeUnstakeTransaction() {
+		log.Info("Tx Pool: validateTx: Submitted Stake/Unstake Tx", "fullhash", tx.Hash().Hex(), "from", tx.From().Hex(), "amount", tx.Value().String(), "action", tx.Data())
+
+		// reject if no input was sent
+		if len(tx.Data()) == 0 {
+			return ErrNoStakeAction
+		}
+		// reject if too much input was sent
+		if len(tx.Data()) > 1 {
+			return ErrInvalidStakeActionLength
+		}
+		stakeAction := tx.Data()[0]
+		isValidStakeAction := false
+
+		// reject if the input action is not stake/unstake
+		if stakeAction == params.StakeAction || stakeAction == params.UnStakeAction {
+			isValidStakeAction = true
+		}
+
+		if !isValidStakeAction {
+			return ErrUnknownStakeAction
+		}
+
+		if stakeAction == params.UnStakeAction {
+			// check if the amount currently staked is >= amount requested to be unstaked
+			if pool.currentState.GetStaked(from).Cmp(tx.Value()) < 0 {
+				return ErrCannotUnstakeMoreThanStaked
+			}
+		}
+		if stakeAction == params.StakeAction {
+			// reject if the staked amount does not meet min stake requirement
+			if tx.Value().Cmp(params.CalculateMinStakeAmount()) < 0 {
+				return ErrMinStakeAmountNotMet
+			}
+			// reject if the account does not have sufficient Balance to stake
+			if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+				return ErrInsufficientFundsToStake
+			}
+			// reject if the account does not have sufficient Available funds to stake
+			// i.e. they have a large balance, but it is Locked for paying WRKChain/BEACON
+			// taxes (after an Enterprise UND purchase)
+			if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 {
+				return ErrInsufficientAvailableToStake
+			}
+		}
+		//good to go.
+		log.Info("staking Tx OK", "stakeAction", stakeAction)
+	} else {
+		// All other Transaction types
+
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		// For WRKChain Txs, cost == V + Tax (1 for Record, 100 for Register)
+		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			// first check if it's a WRKChain Tx, and return a meaningful error
+			if tx.IsWrkchainBeaconTransaction() {
+				return ErrInsufficientFundsForWRKChainTax
+			}
+			return ErrInsufficientFunds
+		}
+
+		// Transactor should also have enough unlocked funds to initiate a UND transfer (including gas costs).
+		// This prevents UND purchased at a fixed price from being used for anything
+		// but network tax. This check is only applicable to non-WRKChain/BEACON Txs, and accounts that are not
+		// currently locked
+		if pool.currentState.GetAvailable(from).Cmp(tx.Cost()) <= 0 && !tx.IsWrkchainBeaconTransaction() && pool.currentState.GetLocked(from) {
+			return ErrCannotTransferLockedUnd
+		}
 	}
 
 	// Ensure the transaction has more gas than the basic tx fee.
-	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
+	intrGas, err := IntrinsicGas(tx.Data(), false, true)
 	if err != nil {
 		return err
 	}
@@ -1180,14 +1247,37 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			pool.all.Remove(hash)
 			log.Trace("Removed old queued transaction", "hash", hash)
 		}
+
 		// Drop all transactions that are too costly (low balance or out of gas)
-		drops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			pool.all.Remove(hash)
-			log.Trace("Removed unpayable queued transaction", "hash", hash)
+		// For non-WRKChain Txs, we need to get the AmountAvailable, which takes into
+		// account any Enterprise purchased "Locked" UND, since Locked UND are not
+		// available for standard UND Transfers or DSG Staking
+
+		// First, drop any non-WRKChain/BEACON Txs, using the Available amount as the costLimit
+		standardDrops, _ := list.Filter(pool.currentState.GetAvailable(addr), pool.currentMaxGas)
+		standardDropsCounter := 0
+		for _, tx := range standardDrops {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable queued non-WRKChain/BEACON transaction", "hash", hash, "currentMaxGas", pool.currentMaxGas, "acc", pool.currentState.GetBalance(addr).String())
+				standardDropsCounter = standardDropsCounter + 1
+			}
 		}
-		queuedNofundsMeter.Mark(int64(len(drops)))
+
+		// Next, check WRKChain/BEACON Txs, using the full Balance amount for costLimit
+		wrkchainDrops, _ := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		wrkchainDropsCounter := 0
+		for _, tx := range wrkchainDrops {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable queued WRKChain/BEACON transaction", "hash", hash, "currentMaxGas", pool.currentMaxGas, "acc", pool.currentState.GetBalance(addr).String())
+				wrkchainDropsCounter = wrkchainDropsCounter + 1
+			}
+		}
+
+		queuedNofundsMeter.Mark(int64(standardDropsCounter + wrkchainDropsCounter))
 
 		// Gather all executable transactions and promote them
 		readies := list.Ready(pool.pendingNonces.get(addr))
@@ -1212,10 +1302,10 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) []*types.Trans
 			queuedRateLimitMeter.Mark(int64(len(caps)))
 		}
 		// Mark all the items dropped as removed
-		pool.priced.Removed(len(forwards) + len(drops) + len(caps))
-		queuedCounter.Dec(int64(len(forwards) + len(drops) + len(caps)))
+		pool.priced.Removed(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps))
+		queuedCounter.Dec(int64(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps)))
 		if pool.locals.contains(addr) {
-			localCounter.Dec(int64(len(forwards) + len(drops) + len(caps)))
+			localCounter.Dec(int64(len(forwards) + standardDropsCounter + wrkchainDropsCounter + len(caps)))
 		}
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
@@ -1372,24 +1462,64 @@ func (pool *TxPool) demoteUnexecutables() {
 			pool.all.Remove(hash)
 			log.Trace("Removed old pending transaction", "hash", hash)
 		}
-		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
-		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
-		for _, tx := range drops {
-			hash := tx.Hash()
-			log.Trace("Removed unpayable pending transaction", "hash", hash)
-			pool.all.Remove(hash)
-		}
-		pool.priced.Removed(len(olds) + len(drops))
-		pendingNofundsMeter.Mark(int64(len(drops)))
 
-		for _, tx := range invalids {
-			hash := tx.Hash()
-			log.Trace("Demoting pending transaction", "hash", hash)
-			pool.enqueueTx(hash, tx)
+		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
+		// For non-WRKChain Txs, we need to get the AmountAvailable, which takes into
+		// account any Enterprise purchased "Locked" UND, since Locked UND are not
+		// available for standard UND Transfers or DSG Staking
+
+		// First, drop any non-WRKChain/BEACON Txs, using the Available amount as the costLimit
+		standardDrops, standardInvalids := list.Filter(pool.currentState.GetAvailable(addr), pool.currentMaxGas)
+		standardDropsCounter := 0
+		standardInvalidsCounter := 0
+		for _, tx := range standardDrops {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable pending non-WRKChain/BEACON transaction", "hash", hash)
+				standardDropsCounter = standardDropsCounter + 1
+			}
 		}
-		pendingCounter.Dec(int64(len(olds) + len(drops) + len(invalids)))
+
+		// Next, check WRKChain/BEACON Txs, using the full Balance amount for costLimit
+		wrkchainDrops, wrkchainInvalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
+		wrkchainDropsCounter := 0
+		wrkchainInvalidsCounter := 0
+		for _, tx := range wrkchainDrops {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				pool.all.Remove(hash)
+				log.Trace("Removed unpayable pending WRKChain/BEACON transaction", "hash", hash)
+				wrkchainDropsCounter = wrkchainDropsCounter + 1
+			}
+		}
+
+		pool.priced.Removed(len(olds) + standardDropsCounter + wrkchainDropsCounter)
+		pendingNofundsMeter.Mark(int64(standardDropsCounter + wrkchainDropsCounter))
+
+		// Go through standard Tx invalids
+		for _, tx := range standardInvalids {
+			if !tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				log.Trace("Demoting pending non-WRKChain/BEACON transaction", "hash", hash)
+				pool.enqueueTx(hash, tx)
+				standardInvalidsCounter = standardInvalidsCounter + 1
+			}
+		}
+
+		// Go through WRKChain Tx invalids
+		for _, tx := range wrkchainInvalids {
+			if tx.IsWrkchainBeaconTransaction() {
+				hash := tx.Hash()
+				log.Trace("Demoting pending WRKChain/BEACON transaction", "hash", hash)
+				pool.enqueueTx(hash, tx)
+				wrkchainInvalidsCounter = wrkchainInvalidsCounter + 1
+			}
+		}
+
+		pendingCounter.Dec(int64(len(olds) + standardDropsCounter + standardInvalidsCounter + wrkchainDropsCounter + wrkchainInvalidsCounter))
 		if pool.locals.contains(addr) {
-			localCounter.Dec(int64(len(olds) + len(drops) + len(invalids)))
+			localCounter.Dec(int64(len(olds) + standardDropsCounter + standardInvalidsCounter + wrkchainDropsCounter + wrkchainInvalidsCounter))
 		}
 		// If there's a gap in front, alert (should never happen) and postpone all transactions
 		if list.Len() > 0 && list.txs.Get(nonce) == nil {

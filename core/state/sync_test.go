@@ -37,6 +37,7 @@ type testAccount struct {
 	code    []byte
 	lockedamount *big.Int
 	locked  bool
+	staked *big.Int
 }
 
 // makeTestState create a sample test state to test node-wise reconstruction.
@@ -59,6 +60,10 @@ func makeTestState() (Database, common.Hash, []*testAccount) {
 
 		obj.AddLockedAmount(big.NewInt(int64(11 * i)))
 		acc.lockedamount = big.NewInt(int64(11 * i))
+
+		obj.AddStaked(big.NewInt(int64(11 * i)))
+		acc.staked = big.NewInt(int64(11 * i))
+
 		if i > 0 {
 			acc.locked = true
 		} else {
@@ -104,6 +109,9 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 		}
 		if locked := state.GetLocked(acc.address); locked != acc.locked {
 			t.Errorf("account %v: locked mismatch: have %v, want %v", i, locked, acc.locked)
+		}
+		if staked := state.GetStaked(acc.address); staked.Cmp(acc.staked) != 0 {
+			t.Errorf("account %d: staked mismatch: have %v, want %v", i, staked, acc.staked)
 		}
 	}
 }

@@ -47,6 +47,7 @@ func TestUpdateLeaks(t *testing.T) {
 		addr := common.BytesToAddress([]byte{i})
 		state.AddBalance(addr, big.NewInt(int64(11*i)))
 		state.AddLockedAmount(addr, big.NewInt(int64(11*i)))
+		state.AddStaked(addr, big.NewInt(int64(11*i)))
 		state.SetNonce(addr, uint64(42*i))
 		if i%2 == 0 {
 			state.SetState(addr, common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
@@ -76,6 +77,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	modify := func(state *StateDB, addr common.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetLockedAmount(addr, big.NewInt(int64(11*i)+int64(tweak)))
+		state.SetStaked(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 		if i%2 == 0 {
 			state.SetState(addr, common.Hash{i, i, i, 0}, common.Hash{})
@@ -135,6 +137,7 @@ func TestCopy(t *testing.T) {
 		obj := orig.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		obj.AddBalance(big.NewInt(int64(i)))
 		obj.AddLockedAmount(big.NewInt(int64(i)))
+		obj.AddStaked(big.NewInt(int64(i)))
 		orig.updateStateObject(obj)
 	}
 	orig.Finalise(false)
@@ -151,6 +154,9 @@ func TestCopy(t *testing.T) {
 
 		origObj.AddLockedAmount(big.NewInt(2 * int64(i)))
 		copyObj.AddLockedAmount(big.NewInt(3 * int64(i)))
+
+		origObj.AddStaked(big.NewInt(2 * int64(i)))
+		copyObj.AddStaked(big.NewInt(3 * int64(i)))
 
 		orig.updateStateObject(origObj)
 		copy.updateStateObject(copyObj)
@@ -180,6 +186,12 @@ func TestCopy(t *testing.T) {
 		}
 		if want := big.NewInt(4 * int64(i)); copyObj.LockedAmount().Cmp(want) != 0 {
 			t.Errorf("copy obj %d: locked amount mismatch: have %v, want %v", i, copyObj.LockedAmount(), want)
+		}
+		if want := big.NewInt(3 * int64(i)); origObj.Staked().Cmp(want) != 0 {
+			t.Errorf("orig obj %d: staked mismatch: have %v, want %v", i, origObj.Staked(), want)
+		}
+		if want := big.NewInt(4 * int64(i)); copyObj.Staked().Cmp(want) != 0 {
+			t.Errorf("copy obj %d: staked mismatch: have %v, want %v", i, copyObj.Staked(), want)
 		}
 
 		if i == 0 {
@@ -266,6 +278,20 @@ func newTestAction(addr common.Address, r *rand.Rand) testAction {
 			name: "AddLockedAmount",
 			fn: func(a testAction, s *StateDB) {
 				s.AddLockedAmount(addr, big.NewInt(a.args[0]))
+			},
+			args: make([]int64, 1),
+		},
+		{
+			name: "SetStaked",
+			fn: func(a testAction, s *StateDB) {
+				s.SetStaked(addr, big.NewInt(a.args[0]))
+			},
+			args: make([]int64, 1),
+		},
+		{
+			name: "AddStaked",
+			fn: func(a testAction, s *StateDB) {
+				s.AddStaked(addr, big.NewInt(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
@@ -439,6 +465,7 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		checkeq("GetLockedAmount", state.GetLockedAmount(addr), checkstate.GetLockedAmount(addr))
 		checkeq("GetLocked", state.GetLocked(addr), checkstate.GetLocked(addr))
+		checkeq("GetStaked", state.GetStaked(addr), checkstate.GetStaked(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
 			state.ForEachStorage(addr, func(key, value common.Hash) bool {
@@ -472,6 +499,7 @@ func (s *StateSuite) TestTouchDelete(c *check.C) {
 	snapshot := s.state.Snapshot()
 	s.state.AddBalance(common.Address{}, new(big.Int))
 	s.state.AddLockedAmount(common.Address{}, new(big.Int))
+	s.state.AddStaked(common.Address{}, new(big.Int))
 
 	if len(s.state.journal.dirties) != 1 {
 		c.Fatal("expected one dirty state object")
@@ -489,6 +517,7 @@ func TestCopyOfCopy(t *testing.T) {
 	addr := common.HexToAddress("aaaa")
 	sdb.SetBalance(addr, big.NewInt(42))
 	sdb.SetLockedAmount(addr, big.NewInt(32))
+	sdb.SetStaked(addr, big.NewInt(22))
 
 	if got := sdb.Copy().GetBalance(addr).Uint64(); got != 42 {
 		t.Fatalf("1st balance copy fail, expected 42, got %v", got)
@@ -509,5 +538,12 @@ func TestCopyOfCopy(t *testing.T) {
 	}
 	if got := sdb.Copy().Copy().GetLocked(addr); got != true {
 		t.Fatalf("2nd locked copy fail, expected true, got %v", got)
+	}
+
+	if got := sdb.Copy().GetStaked(addr).Uint64(); got != 22 {
+		t.Fatalf("1st staked copy fail, expected 22, got %v", got)
+	}
+	if got := sdb.Copy().Copy().GetStaked(addr).Uint64(); got != 22 {
+		t.Fatalf("2nd staked copy fail, expected 22, got %v", got)
 	}
 }

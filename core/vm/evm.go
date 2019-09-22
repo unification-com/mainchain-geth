@@ -42,6 +42,9 @@ type (
 
 	HasEnoughUnlockedFunc func(StateDB, common.Address, *big.Int) bool
 	LockUndFunc func(StateDB, common.Address, common.Address, *big.Int)
+	StakeFunc func(StateDB, common.Address, *big.Int)
+    UnStakeFunc func(StateDB, common.Address, *big.Int)
+	CanUnstakeFunc func(StateDB, common.Address, *big.Int) bool
 )
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
@@ -95,6 +98,9 @@ type Context struct {
 
 	HasEnoughUnlocked HasEnoughUnlockedFunc
 	LockUnd LockUndFunc
+	Stake StakeFunc
+	UnStake UnStakeFunc
+	CanUnstake CanUnstakeFunc
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -206,7 +212,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	// Fail if we're trying to transfer more UND than is available (unlocked)
 	// NOTE: Should not happen unless there is an attempt to transfer UND
-	// to WRKChain Root, BEACON or DSG contracts
 	if !evm.HasEnoughUnlocked(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrCannotTransferLockedUnd
 	}
@@ -302,7 +307,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// Fail if we're trying to transfer more UND than is available (unlocked)
 	// NOTE: Should not happen unless there is an attempt to transfer UND
-	// to WRKChain Root, BEACON or DSG contracts
 	if !evm.HasEnoughUnlocked(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrCannotTransferLockedUnd
 	}
@@ -520,6 +524,34 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	codeAndHash := &codeAndHash{code: code}
 	contractAddr = crypto.CreateAddress2(caller.Address(), common.BigToHash(salt), codeAndHash.Hash().Bytes())
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr)
+}
+
+// StakeUnstake processes staking/unstaking calls
+func (evm *EVM) StakeUnstake(caller ContractRef, data []byte,  gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	stakeAction := data[0]
+	switch stakeAction {
+	case params.StakeAction:
+		// Fail if we're trying to stake more than the available balance
+		if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+			return nil, gas, ErrInsufficientBalanceForStake
+		}
+		// Fail if we're trying to stake more UND than is available (unlocked)
+		if !evm.HasEnoughUnlocked(evm.StateDB, caller.Address(), value) {
+			return nil, gas, ErrCannotStakeLockedUnd
+		}
+		// Stake
+		evm.Stake(evm.StateDB, caller.Address(), value)
+	case params.UnStakeAction:
+		if !evm.CanUnstake(evm.StateDB, caller.Address(), value) {
+			return nil, gas, ErrCannotUnstakeMoreThanStaked
+		}
+		// Unstake
+		evm.UnStake(evm.StateDB, caller.Address(), value)
+	default:
+		return nil, gas, ErrUnknownStakeAction
+	}
+
+	return nil, gas, nil
 }
 
 // ChainConfig returns the environment's chain configuration

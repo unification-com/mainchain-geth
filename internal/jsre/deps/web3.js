@@ -5299,6 +5299,14 @@ var methods = function () {
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
+    var getStaked = new Method({
+        name: 'getStaked',
+        call: 'eth_getStaked',
+        params: 2,
+        inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+        outputFormatter: formatters.outputBigNumberFormatter
+    });
+
     var getStorageAt = new Method({
         name: 'getStorageAt',
         call: 'eth_getStorageAt',
@@ -5460,6 +5468,7 @@ var methods = function () {
         getLockedAmount,
         getLocked,
         getAvailable,
+        getStaked,
         getStorageAt,
         getCode,
         getBlock,

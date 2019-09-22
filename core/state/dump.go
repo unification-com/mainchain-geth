@@ -29,16 +29,17 @@ import (
 
 // DumpAccount represents an account in the state
 type DumpAccount struct {
-	Balance   string                 `json:"balance"`
-	Nonce     uint64                 `json:"nonce"`
-	Root      string                 `json:"root"`
-	CodeHash  string                 `json:"codeHash"`
-	Code      string                 `json:"code,omitempty"`
-	Locked    bool                   `json:"locked"`
-	LockedAmount string              `json:"lockedAmount"`
-	Storage   map[common.Hash]string `json:"storage,omitempty"`
-	Address   *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
-	SecureKey hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
+	Balance      string                 `json:"balance"`
+	Nonce        uint64                 `json:"nonce"`
+	Root         string                 `json:"root"`
+	CodeHash     string                 `json:"codeHash"`
+	Code         string                 `json:"code,omitempty"`
+	Locked       bool                   `json:"locked"`
+	LockedAmount string                 `json:"lockedAmount"`
+	Staked       string                 `json:"staked"`
+	Storage      map[common.Hash]string `json:"storage,omitempty"`
+	Address      *common.Address        `json:"address,omitempty"` // Address only present in iterative (line-by-line) mode
+	SecureKey    hexutil.Bytes          `json:"key,omitempty"`     // If we don't have address, we can output the key
 
 }
 
@@ -67,16 +68,17 @@ func (self *Dump) onAccount(addr common.Address, account DumpAccount) {
 
 func (self iterativeDump) onAccount(addr common.Address, account DumpAccount) {
 	dumpAccount := &DumpAccount{
-		Balance:   account.Balance,
-		Nonce:     account.Nonce,
-		Root:      account.Root,
-		CodeHash:  account.CodeHash,
-		Code:      account.Code,
-		Locked:    account.Locked,
+		Balance:      account.Balance,
+		Nonce:        account.Nonce,
+		Root:         account.Root,
+		CodeHash:     account.CodeHash,
+		Code:         account.Code,
+		Locked:       account.Locked,
 		LockedAmount: account.LockedAmount,
-		Storage:   account.Storage,
-		SecureKey: account.SecureKey,
-		Address:   nil,
+		Staked:       account.Staked,
+		Storage:      account.Storage,
+		SecureKey:    account.SecureKey,
+		Address:      nil,
 	}
 	if addr != (common.Address{}) {
 		dumpAccount.Address = &addr
@@ -108,6 +110,7 @@ func (self *StateDB) dump(c collector, excludeCode, excludeStorage, excludeMissi
 			CodeHash: common.Bytes2Hex(data.CodeHash),
 			Locked:   data.LockedAmount.Sign() > 0,
 			LockedAmount: data.LockedAmount.String(),
+			Staked: data.Staked.String(),
 		}
 		if emptyAddress == addr {
 			// Preimage missing

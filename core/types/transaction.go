@@ -149,6 +149,15 @@ func (tx *Transaction) IsRegisterWRKChainBeaconTx() bool {
 	return callMethod == common.RegisterWrkChainMethod || callMethod == common.RegisterBeaconMethod
 }
 
+// IsStakeUnstakeTransaction checks if a Tx is a WRKChain
+// Root or Beacon Tx
+func (tx *Transaction) IsStakeUnstakeTransaction() bool {
+	if tx.To() == nil {
+		return false
+	}
+	return tx.To().String() == common.StakeAddress
+}
+
 // EncodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
@@ -266,6 +275,7 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		data:             tx.data.Payload,
 		checkNonce:       true,
 		isWrkChainBeacon: tx.IsWrkchainBeaconTransaction(),
+		isStakeUnstake:   tx.IsStakeUnstakeTransaction(),
 	}
 
 	var err error
@@ -291,6 +301,9 @@ func (tx *Transaction) Cost() *big.Int {
 	if tx.IsWrkchainBeaconTransaction() {
 		return tx.WRKChainTax()
 	}
+	if tx.IsStakeUnstakeTransaction() {
+		return tx.StakeUnstakeCost()
+	}
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
 	total.Add(total, tx.data.Amount)
 	return total
@@ -305,6 +318,21 @@ func (tx *Transaction) WRKChainTax() *big.Int {
 	tax := params.CalculateNetworkTax(tx.IsRegisterWRKChainBeaconTx())
 	tax.Add(tax, tx.data.Amount)
 	return tax
+}
+
+// StakeUnstakeCost calculates the cost of Staking/Unstaking.
+// For Staking, the Amount is taken into consideration to ensure the
+// account has enough funds to Stake. For Unstaking, only the gas price is
+// calculated, since we're just shifting UND from Staked to Balance
+func (tx *Transaction) StakeUnstakeCost() *big.Int {
+	stakeAction := tx.Data()[0]
+	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
+
+	if stakeAction == params.StakeAction {
+		total.Add(total, tx.data.Amount)
+	}
+
+	return total
 }
 
 // WRKChainRootMethod returns the WRKChain Root or Beacon method called
@@ -467,14 +495,19 @@ type Message struct {
 	data             []byte
 	checkNonce       bool
 	isWrkChainBeacon bool
+	isStakeUnstake   bool
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
 	isWrkChainBeacon := false
+	isStakeUnstake := false
 
 	if to != nil {
 		if to.String() == common.WRKChainRoot || to.String() == common.Beacon {
 			isWrkChainBeacon = true
+		}
+		if to.String() == common.StakeAddress {
+			isStakeUnstake = true
 		}
 	}
 
@@ -488,6 +521,7 @@ func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *b
 		data:             data,
 		checkNonce:       checkNonce,
 		isWrkChainBeacon: isWrkChainBeacon,
+		isStakeUnstake:   isStakeUnstake,
 	}
 }
 
@@ -500,6 +534,7 @@ func (m Message) Nonce() uint64                 { return m.nonce }
 func (m Message) Data() []byte                  { return m.data }
 func (m Message) CheckNonce() bool              { return m.checkNonce }
 func (m Message) IsWrkchainBeaconMessage() bool { return m.isWrkChainBeacon }
+func (m Message) IsStakeUnstakeMessage() bool   { return m.isStakeUnstake }
 func (m Message) IsRegisterWrkchainBeaconMsg() bool {
 	if !m.isWrkChainBeacon {
 		return false

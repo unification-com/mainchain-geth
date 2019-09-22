@@ -71,6 +71,10 @@ type StateDB interface {
 	SubLockedAmount(common.Address, *big.Int)
 	AddLockedAmount(common.Address, *big.Int)
 
+	SubStaked(common.Address, *big.Int)
+	AddStaked(common.Address, *big.Int)
+	GetStaked(common.Address) *big.Int
+
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
