@@ -137,6 +137,7 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
+	verifiedBlockSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -207,6 +208,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
+	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
+
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
@@ -218,6 +221,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
+	go worker.sealingBroadcastLoop()
 
 	// Submit first work to initialize pending state.
 	worker.startCh <- struct{}{}
@@ -283,6 +287,14 @@ func (w *worker) isRunning() bool {
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
 	close(w.exitCh)
+}
+
+func (w *worker) sealingBroadcastLoop() {
+	for obj := range w.verifiedBlockSub.Chan() {
+		if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
+			log.Info("Processing a BlockVerified Event", "Event", ev)
+		}
+	}
 }
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
