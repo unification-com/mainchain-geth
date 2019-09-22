@@ -290,9 +290,15 @@ func (w *worker) close() {
 }
 
 func (w *worker) sealingBroadcastLoop() {
+	var (
+		stopCh chan struct{}
+	)
+
 	for obj := range w.verifiedBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
-			log.Info("Processing a BlockVerified Event", "Event", ev)
+			if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
+				log.Warn("Block sealing failed", "err", err)
+			}
 		}
 	}
 }
@@ -547,8 +553,6 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			statedb, _ := w.chain.State()
-			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
-			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 
 			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
 			if !v {
@@ -557,9 +561,12 @@ func (w *worker) taskLoop() {
 			}
 			log.Info("⭐ The author may produce this block")
 
-			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
-				log.Warn("Block sealing failed", "err", err)
-			}
+			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
+			cache := w.chain.GetDSGCache()
+			cache.InsertBlockProposal(blockProposal)
+
+			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+
 		case <-w.exitCh:
 			interrupt()
 			return
