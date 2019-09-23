@@ -6,7 +6,6 @@ import (
 	"sort"
 )
 
-
 type StakedWallet struct {
 	Address common.Address
 	Staked  *big.Int
@@ -15,7 +14,7 @@ type StakedWallet struct {
 func getStakedWallets() []StakedWallet {
 	// ToDo - get from stateDb, or create snapshot
 
-	stakedWallets := []StakedWallet {
+	stakedWallets := []StakedWallet{
 		{common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"), big.NewInt(10)},
 		{common.HexToAddress("0x002A956804bAD8DCad148aBFF71515F9B057F7E0"), big.NewInt(1000)},
 		{common.HexToAddress("0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15"), big.NewInt(100)},
