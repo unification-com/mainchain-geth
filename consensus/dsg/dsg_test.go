@@ -21,7 +21,7 @@ func TestGetValidationPool(t *testing.T) {
 	validationPool := GetValidatorPool()
 
 	for i, vp := range validationPool {
-		t.Log("validationPool", i ,vp.Hex())
+		t.Log("validationPool", i, vp.Hex())
 	}
 }
 

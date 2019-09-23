@@ -19,14 +19,14 @@ type Cache struct {
 }
 
 type ValidationKey struct {
-	BlockNum  uint64 `json:"blocknum"`
-	Proposer  uint64 `json:"proposer"`
-	Validator uint64 `json:"validator"`
+	BlockNum  uint64         `json:"blocknum"`
+	Proposer  common.Address `json:"proposer"`
+	Validator common.Address `json:"validator"`
 }
 
 type ProposalKey struct {
-	BlockNum uint64 `json:"blocknum"`
-	Proposer uint64 `json:"proposer"`
+	BlockNum uint64         `json:"blocknum"`
+	Proposer common.Address `json:"proposer"`
 }
 
 func NewCache() *Cache {
@@ -43,7 +43,7 @@ func NewCache() *Cache {
 
 func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 	n := bp.Number.Uint64()
-	p := bp.ProposerId.Uint64()
+	p := bp.Proposer
 
 	key := ProposalKey{
 		BlockNum: n,
@@ -53,10 +53,10 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 	d.proposals.Add(key, bp)
 }
 
-func (d *Cache) GetBlockProposal(blockNum *big.Int, proposerId *big.Int) (BlockProposal, error) {
+func (d *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
 	key := ProposalKey{
 		BlockNum: blockNum.Uint64(),
-		Proposer: proposerId.Uint64(),
+		Proposer: proposer,
 	}
 
 	var blockProposal BlockProposal
@@ -90,8 +90,8 @@ func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
 
 func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
 	n := msg.Number.Uint64()
-	v := msg.VerifierId.Uint64()
-	p := msg.ProposerId.Uint64()
+	v := msg.Verifier
+	p := msg.Proposer
 
 	key := ValidationKey{
 		BlockNum:  n,
@@ -105,20 +105,14 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
 	return d.acceptBlock(n, p)
 }
 
-func (d *Cache) acceptBlock(blockNum uint64, proposerId uint64) bool {
+func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 	acks := float64(0)
 
-	for i := uint64(0); i < common.NumSignersInRound; i++ {
-		lookupKey := ValidationKey{
-			BlockNum:  blockNum,
-			Validator: i,
-			Proposer:  proposerId,
-		}
-
-		var validationMessage ValidationMessage
-		if vm, ok := d.validations.Get(lookupKey); ok {
+	var validationMessage ValidationMessage
+	for _, key := range d.validations.Keys() {
+		if vm, ok := d.validations.Get(key); ok {
 			if validationMessage, ok = vm.(ValidationMessage); ok {
-				if validationMessage.Authorize == true {
+				if (validationMessage.Number.Uint64() == blockNum) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
 					acks = acks + 1
 				}
 			}
@@ -128,6 +122,6 @@ func (d *Cache) acceptBlock(blockNum uint64, proposerId uint64) bool {
 	totalSignersFloat := float64(common.NumSignersInRound)
 	requirement := float64(2) / totalSignersFloat
 	acknowledges := acks / totalSignersFloat
-	log.Info("acceptBlock", "num", blockNum, "proposer", proposerId, "acks", acks)
+	log.Info("acceptBlock", "num", blockNum, "proposer", proposer, "acks", acks)
 	return acknowledges >= requirement
 }

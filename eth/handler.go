@@ -398,14 +398,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
-		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.ProposerId.Uint64(), "validator", validationMessage.VerifierId.String(), "authorise", validationMessage.Authorize)
+		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.Proposer, "validator", validationMessage.Verifier, "authorise", validationMessage.Authorize)
 
 		cache := pm.blockchain.GetDSGCache()
 		acceptBlock := cache.InsertValidationMessage(validationMessage)
 
 		evid := dsg.EVIdFromEtherbase(pm.etherbase)
-		if acceptBlock && evid == validationMessage.ProposerId.Uint64() {
-			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.ProposerId)
+		if acceptBlock && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
+			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
 			blockProposal, err := cache.GetBlockProposalByHash(validationMessage.BlockHash)
 			if err != nil {
 				log.Error("Block Proposal not found in cache")
@@ -423,9 +423,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 		valid := proposal.ValidateBlockProposal()
-		verifierId := dsg.EVIdFromEtherbase(pm.etherbase)
 
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, VerifierId:big.NewInt(int64(verifierId)), ProposerId: proposal.ProposerId, Signature: common.Hash{}, Authorize:valid}
+		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
 
 
