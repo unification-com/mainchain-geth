@@ -78,13 +78,13 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func getTurn(blockNumber *big.Int) *big.Int {
-	d := blockNumber.Sub(blockNumber, big.NewInt(1))
-	turn := blockNumber.Mod(d, big.NewInt(common.NumSignersInRound))
+func getTurn(blockNumber uint64) uint64 {
+	d := blockNumber - 1
+	turn := d % common.NumSignersInRound
 	return turn
 }
 
-func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) bool {
+func valid(statedb *state.StateDB, blockNumber uint64, signer common.Address) bool {
 	turn := getTurn(blockNumber)
 
 	var whitelist []common.Address
@@ -94,13 +94,13 @@ func valid(statedb *state.StateDB, blockNumber *big.Int, signer common.Address) 
 		whitelist = append(whitelist, common.BytesToAddress(keyhash[:]))
 	}
 
-	allowed := whitelist[turn.Int64()]
+	allowed := whitelist[turn]
 
 	return allowed == signer
 }
 
 func DSGSeal(statedb *state.StateDB, block *types.Block, signer common.Address) (bool, error) {
-	v := valid(statedb, block.Number(), signer)
+	v := valid(statedb, block.Number().Uint64(), signer)
 
 	return v, nil
 }
@@ -117,18 +117,18 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	}
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	v := valid(statedb, block.Number(), signer)
+	v := valid(statedb, block.Number().Uint64(), signer)
 	return v, nil
 }
 
-func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numQuarters uint64, activeSigners uint64) (uint64, uint64) {
+func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) (uint64, uint64) {
 	var blockNumberBase0 = blockNumber - 1
 	var blockIndex = blockNumberBase0 % blocksInEpoch
 	var epochNumber = blockNumberBase0 / blocksInEpoch
 
-	var quadrant = blockIndex / (blocksInEpoch / numQuarters)
-	var numSignersInQuadrant = activeSigners / numQuarters
-	var factor = activeSigners / numQuarters
+	var quadrant = blockIndex / (blocksInEpoch / numRounds)
+	var numSignersInQuadrant = numSigners / numRounds
+	var factor = numSigners / numRounds
 	var position = blockIndex % numSignersInQuadrant
 	var signerIndex = quadrant*factor + (position + 1)
 

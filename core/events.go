@@ -36,6 +36,9 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // NewBlockProposalEvent
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 
+// BlockVerifiedEvent
+type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
+
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 

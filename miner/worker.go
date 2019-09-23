@@ -137,6 +137,7 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
+	verifiedBlockSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -207,6 +208,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
+	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
+
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
@@ -218,6 +221,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
+	go worker.sealingBroadcastLoop()
 
 	// Submit first work to initialize pending state.
 	worker.startCh <- struct{}{}
@@ -283,6 +287,20 @@ func (w *worker) isRunning() bool {
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
 	close(w.exitCh)
+}
+
+func (w *worker) sealingBroadcastLoop() {
+	var (
+		stopCh chan struct{}
+	)
+
+	for obj := range w.verifiedBlockSub.Chan() {
+		if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
+			if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
+				log.Warn("Block sealing failed", "err", err)
+			}
+		}
+	}
 }
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
@@ -535,8 +553,6 @@ func (w *worker) taskLoop() {
 			w.pendingMu.Unlock()
 
 			statedb, _ := w.chain.State()
-			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
-			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 
 			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
 			if !v {
@@ -545,9 +561,12 @@ func (w *worker) taskLoop() {
 			}
 			log.Info("⭐ The author may produce this block")
 
-			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
-				log.Warn("Block sealing failed", "err", err)
-			}
+			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
+			cache := w.chain.GetDSGCache()
+			cache.InsertBlockProposal(blockProposal)
+
+			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+
 		case <-w.exitCh:
 			interrupt()
 			return

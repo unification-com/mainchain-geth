@@ -402,8 +402,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		cache := pm.blockchain.GetDSGCache()
 		acceptBlock := cache.InsertValidationMessage(validationMessage)
-		if acceptBlock {
-			log.Info("Accepting block", "num", validationMessage.Number, "proposer", validationMessage.ProposerId)
+
+		evid := dsg.EVIdFromEtherbase(pm.etherbase)
+		if acceptBlock && evid == validationMessage.ProposerId.Uint64() {
+			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.ProposerId)
+			blockProposal, err := cache.GetBlockProposalByHash(validationMessage.BlockHash)
+			if err != nil {
+				log.Error("Block Proposal not found in cache")
+				return nil
+			}
+			go pm.eventMux.Post(core.BlockVerifiedEvent{BlockProposal: &blockProposal})
 		}
 
 	case msg.Code == BlockProposalMsg:

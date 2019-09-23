@@ -9,24 +9,24 @@ import (
 )
 
 const (
-	inmMemoryProposals  = 96 // Number of recent block proposals to keep in memory
+	inmMemoryProposals  = 96   // Number of recent block proposals to keep in memory
 	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
 )
 
 type Cache struct {
 	validations *lru.ARCCache
-	proposals *lru.ARCCache
+	proposals   *lru.ARCCache
 }
 
 type ValidationKey struct {
-	BlockNum uint64      `json:"blocknum"`
-	Proposer uint64      `json:"proposer"`
-	Validator uint64     `json:"validator"`
+	BlockNum  uint64 `json:"blocknum"`
+	Proposer  uint64 `json:"proposer"`
+	Validator uint64 `json:"validator"`
 }
 
 type ProposalKey struct {
-	BlockNum uint64      `json:"blocknum"`
-	Proposer uint64      `json:"proposer"`
+	BlockNum uint64 `json:"blocknum"`
+	Proposer uint64 `json:"proposer"`
 }
 
 func NewCache() *Cache {
@@ -36,7 +36,7 @@ func NewCache() *Cache {
 
 	cache := &Cache{
 		validations: validations,
-		proposals: proposals,
+		proposals:   proposals,
 	}
 	return cache
 }
@@ -65,7 +65,22 @@ func (d *Cache) GetBlockProposal(blockNum *big.Int, proposerId *big.Int) (BlockP
 			return blockProposal, nil
 		}
 	}
-	
+
+	return blockProposal, errors.New("could not retrieve block proposal from cache")
+}
+
+func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) {
+	var blockProposal BlockProposal
+	for _, key := range d.proposals.Keys() {
+		if bp, ok := d.proposals.Get(key); ok {
+			if blockProposal, ok = bp.(BlockProposal); ok {
+				if blockProposal.BlockHash == hash {
+					return blockProposal, nil
+				}
+			}
+		}
+	}
+
 	return blockProposal, errors.New("could not retrieve block proposal from cache")
 }
 
@@ -79,13 +94,13 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
 	p := msg.ProposerId.Uint64()
 
 	key := ValidationKey{
-		BlockNum: n,
+		BlockNum:  n,
 		Validator: v,
-		Proposer: p,
+		Proposer:  p,
 	}
 
 	log.Info("insertValidationMessage", "block", key.BlockNum, "proposer", key.Proposer, "validator", key.Validator, "authorise", msg.Authorize)
-    d.validations.Add(key, msg)
+	d.validations.Add(key, msg)
 
 	return d.acceptBlock(n, p)
 }
@@ -95,9 +110,9 @@ func (d *Cache) acceptBlock(blockNum uint64, proposerId uint64) bool {
 
 	for i := uint64(0); i < common.NumSignersInRound; i++ {
 		lookupKey := ValidationKey{
-			BlockNum: blockNum,
+			BlockNum:  blockNum,
 			Validator: i,
-			Proposer: proposerId,
+			Proposer:  proposerId,
 		}
 
 		var validationMessage ValidationMessage
