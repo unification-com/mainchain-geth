@@ -552,18 +552,23 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
 
-			statedb, _ := w.chain.State()
-
-			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
-			if !v {
-				log.Info("The author may not produce this block")
-				continue
-			}
-			log.Info("⭐ The author may produce this block")
+			v, _ := dsg.DSGSeal(task.block, w.config.Etherbase)
 
 			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
+
+			// store in own cache for potential next-in-line proposal
 			cache := w.chain.GetDSGCache()
 			cache.InsertBlockProposal(blockProposal)
+
+			if !v {
+				if task.block.Number().Uint64() > 0 {
+					log.Info("The author may not propose this block - listen for block proposal")
+					vm := dsg.ListenForBlockProposal(cache, task.block.Number(), w.config.Etherbase)
+					go w.mux.Post(core.NewValidationMessageEvent{ValidationMessage: &vm})
+				}
+				continue
+			}
+			log.Info("⭐ The author may propose this block")
 
 			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 
