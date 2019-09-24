@@ -2,7 +2,6 @@ package dsg
 
 import (
 	"github.com/unification-com/mainchain/common"
-	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/crypto"
 	"github.com/unification-com/mainchain/log"
@@ -76,34 +75,23 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func getTurn(blockNumber uint64) uint64 {
-	d := blockNumber - 1
-	turn := d % common.NumSignersInRound
-	return turn
-}
+func valid(blockNumber uint64, signer common.Address) bool {
+	turn, _ := EVSlot(blockNumber)
 
-func valid(statedb *state.StateDB, blockNumber uint64, signer common.Address) bool {
-	turn := getTurn(blockNumber)
+	whitelist := getStakedWallets()
 
-	var whitelist []common.Address
-
-	for i := 0; i < common.NumSignersInRound; i++ {
-		keyhash := statedb.GetState(common.HexToAddress(common.DSG), common.BigToHash(big.NewInt(int64(i))))
-		whitelist = append(whitelist, common.BytesToAddress(keyhash[:]))
-	}
-
-	allowed := whitelist[turn]
+	allowed := whitelist[turn].Address
 
 	return allowed == signer
 }
 
-func DSGSeal(statedb *state.StateDB, block *types.Block, signer common.Address) (bool, error) {
-	v := valid(statedb, block.Number().Uint64(), signer)
+func DSGSeal(block *types.Block, signer common.Address) (bool, error) {
+	v := valid(block.Number().Uint64(), signer)
 
 	return v, nil
 }
 
-func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
+func DSGFilter(block types.Block) (bool, error) {
 	extraSeal := 65
 	header := block.Header()
 	signature := header.Extra[len(header.Extra)-extraSeal:]
@@ -115,7 +103,7 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	}
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	v := valid(statedb, block.Number().Uint64(), signer)
+	v := valid(block.Number().Uint64(), signer)
 	return v, nil
 }
 
@@ -137,4 +125,23 @@ func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numRounds uint64, 
 // where the genesis block is block 0, and the current Epoch
 func EVSlot(blockNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+}
+
+func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address, res chan struct{}) ValidationMessage {
+
+	expectedProposer, _ := EVSlot(blockNum.Uint64())
+	stakers := getStakedWallets()
+	proposerAddress := stakers[expectedProposer].Address
+	valid := false
+
+	bp, err := cache.PollBlockProposalCache(blockNum, proposerAddress)
+
+	if err != nil {
+		log.Info("listen for block proposal error","err", err)
+	} else {
+		log.Info("listen success - found bp in cache and validating", "block", bp.Number, "proposer", bp.Proposer)
+		valid = bp.ValidateBlockProposal()
+	}
+	vm := ValidationMessage{Number: bp.Number, BlockHash: bp.BlockHash, Verifier: verifier, Proposer: bp.Proposer, Signature: common.Hash{}, Authorize:valid}
+	return vm
 }
