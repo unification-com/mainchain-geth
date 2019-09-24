@@ -6,6 +6,7 @@ import (
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/log"
 	"math/big"
+	"time"
 )
 
 const (
@@ -49,6 +50,8 @@ func (d *Cache) InsertBlockProposal(bp BlockProposal) {
 		BlockNum: n,
 		Proposer: p,
 	}
+
+	log.Info("cache new block proposal", "block", key.BlockNum, "proposer", key.Proposer)
 
 	d.proposals.Add(key, bp)
 }
@@ -124,4 +127,22 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 	acknowledges := acks / totalSignersFloat
 	log.Info("acceptBlock", "num", blockNum, "proposer", proposer, "acks", acks)
 	return acknowledges >= requirement
+}
+
+func (d *Cache) PollBlockProposalCache(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
+	var blockProposal BlockProposal
+	log.Info("PollBlockProposalCache", "blockNum", blockNum, "proposer", proposer)
+	timeout := time.After(1000 * time.Millisecond)
+	for {
+		select {
+		case <-timeout:
+			return blockProposal, errors.New("block proposal cache timout")
+		default:
+			// keep querying cache until timeout reached
+			blockProposal, err := d.GetBlockProposal(blockNum, proposer)
+			if err == nil {
+				return blockProposal, nil
+			}
+		}
+	}
 }
