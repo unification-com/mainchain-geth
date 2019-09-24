@@ -127,7 +127,7 @@ func EVSlot(blockNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }
 
-func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address, res chan struct{}) ValidationMessage {
+func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address) ValidationMessage {
 
 	expectedProposer, _ := EVSlot(blockNum.Uint64())
 	stakers := getStakedWallets()
