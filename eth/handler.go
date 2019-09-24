@@ -85,6 +85,7 @@ type ProtocolManager struct {
 	txsSub        event.Subscription
 	minedBlockSub *event.TypeMuxSubscription
 	proposalBlockSub *event.TypeMuxSubscription
+	validationMessageSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 	etherbase common.Address
@@ -163,8 +164,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		return blockchain.CurrentBlock().NumberU64()
 	}
 	filter := func(block types.Block) bool {
-		statedb, _ := manager.blockchain.State()
-		val, _ := dsg.DSGFilter(statedb, block)
+		val, _ := dsg.DSGFilter(block)
 		return val
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
@@ -261,8 +261,10 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
+	pm.validationMessageSub = pm.eventMux.Subscribe(core.NewValidationMessageEvent{})
 	go pm.minedBroadcastLoop()
 	go pm.proposedBroadcastLoop()
+	go pm.validationMessagetLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -422,11 +424,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 
-		valid := proposal.ValidateBlockProposal()
-
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
-		pm.AsyncBroadcastValidationMessage(&vm)
-
+		cache := pm.blockchain.GetDSGCache()
+		cache.InsertBlockProposal(proposal)
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
@@ -907,6 +906,15 @@ func (pm *ProtocolManager) proposedBroadcastLoop() {
 	for obj := range pm.proposalBlockSub.Chan() {
 		if ev, ok := obj.Data.(core.NewBlockProposalEvent); ok {
 			pm.AsyncBroadcastBlockProposal(ev.BlockProposal)
+		}
+	}
+}
+
+// Validation Message broadcast loop
+func (pm *ProtocolManager) validationMessagetLoop() {
+	for obj := range pm.validationMessageSub.Chan() {
+		if ev, ok := obj.Data.(core.NewValidationMessageEvent); ok {
+			pm.AsyncBroadcastValidationMessage(ev.ValidationMessage)
 		}
 	}
 }

@@ -36,6 +36,8 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // NewBlockProposalEvent
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 
+type NewValidationMessageEvent struct{ ValidationMessage *dsg.ValidationMessage }
+
 // BlockVerifiedEvent
 type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
 
