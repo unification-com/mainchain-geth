@@ -65,6 +65,14 @@ func EVIdFromEtherbase(etherbase common.Address) uint64 {
 	return uint64(0)
 }
 
+func getAddressFromSlotNumber(index uint64) common.Address {
+	stakedWallets := getStakedWallets()
+	if int(index) < len(stakedWallets) {
+		return stakedWallets[index].Address
+	}
+	return common.Address{}
+}
+
 // Take the first EV and append it to the end, shifting the slots
 func ShiftEVs(stakedWallets []StakedWallet) []StakedWallet {
 	x, stakedWallets := stakedWallets[0], stakedWallets[1:]

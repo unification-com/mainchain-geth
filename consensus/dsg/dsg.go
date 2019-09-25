@@ -78,9 +78,7 @@ func SealHash(header *types.Header) (hash common.Hash) {
 func valid(blockNumber uint64, signer common.Address) bool {
 	turn, _ := EVSlot(blockNumber)
 
-	whitelist := getStakedWallets()
-
-	allowed := whitelist[turn].Address
+	allowed := getAddressFromSlotNumber(turn)
 
 	return allowed == signer
 }
@@ -130,8 +128,7 @@ func EVSlot(blockNumber uint64) (uint64, uint64) {
 func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address) ValidationMessage {
 
 	expectedProposer, _ := EVSlot(blockNum.Uint64())
-	stakers := getStakedWallets()
-	proposerAddress := stakers[expectedProposer].Address
+	proposerAddress := getAddressFromSlotNumber(expectedProposer)
 	valid := false
 
 	bp, err := cache.PollBlockProposalCache(blockNum, proposerAddress)
