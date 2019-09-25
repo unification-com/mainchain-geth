@@ -414,6 +414,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return nil
 			}
 			go pm.eventMux.Post(core.BlockVerifiedEvent{BlockProposal: &blockProposal})
+		} else {
+			// TODO - check number of validation messages, and NACKS. Send new RequestNewBlockProposalMessage
+			// if NACKs > 1/3, or validation message timeout
 		}
 
 	case msg.Code == BlockProposalMsg:
