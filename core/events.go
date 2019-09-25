@@ -42,6 +42,9 @@ type NewBlockProposalFoundEvent struct{ }
 // NewBlockProposalEvent: used to instruct the ProtocolManager to send a BlockProposal
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 
+// RequestNewBlockProposalMessageEvent
+type RequestNewBlockProposalMessage struct{ RequestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage }
+
 // BlockVerifiedEvent
 type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
 

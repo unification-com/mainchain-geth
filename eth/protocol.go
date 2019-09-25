@@ -42,7 +42,7 @@ const protocolName = "eth"
 var ProtocolVersions = []uint{eth64}
 
 // protocolLengths are the number of implemented message corresponding to different protocol versions.
-var protocolLengths = map[uint]uint64{eth64: 19, eth63: 17, eth62: 8}
+var protocolLengths = map[uint]uint64{eth64: 20, eth63: 17, eth62: 8}
 
 const protocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -65,8 +65,9 @@ const (
 	ReceiptsMsg    = 0x10
 
 	// Protocol messages belonging to DSG
-	BlockProposalMsg = 0x11
-	ValidationMsg    = 0x12
+	BlockProposalMsg           = 0x11
+	ValidationMsg              = 0x12
+	RequestNewBlockProposalMsg = 0x13
 )
 
 type errCode int
