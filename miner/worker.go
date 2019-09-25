@@ -563,8 +563,12 @@ func (w *worker) taskLoop() {
 			if !v {
 				if task.block.Number().Uint64() > 0 {
 					log.Info("The author may not propose this block - listen for block proposal")
-					vm := dsg.ListenForBlockProposal(cache, task.block.Number(), w.config.Etherbase)
+					vm, rbp, sendBpReq := dsg.ListenForBlockProposal(cache, task.block.Number(), w.config.Etherbase)
 					go w.mux.Post(core.NewValidationMessageEvent{ValidationMessage: &vm})
+					if sendBpReq {
+						log.Info("failed to listen for and and retrieve BP. Request new BP:", "number", rbp.Number, "slot", rbp.Slot, "proposer", rbp.Proposer)
+						go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
+					}
 				}
 				continue
 			}
