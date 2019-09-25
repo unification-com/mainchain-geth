@@ -65,8 +65,9 @@ const (
 	ReceiptsMsg    = 0x10
 
 	// Protocol messages belonging to DSG
-	BlockProposalMsg = 0x11
-	ValidationMsg    = 0x12
+	BlockProposalMsg           = 0x11
+	ValidationMsg              = 0x12
+	RequestNewBlockProposalMsg = 0x14
 )
 
 type errCode int

@@ -86,6 +86,7 @@ type ProtocolManager struct {
 	minedBlockSub *event.TypeMuxSubscription
 	proposalBlockSub *event.TypeMuxSubscription
 	validationMessageSub *event.TypeMuxSubscription
+	requestNewBlockProposalSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 	etherbase common.Address
@@ -262,9 +263,11 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
 	pm.validationMessageSub = pm.eventMux.Subscribe(core.NewValidationMessageEvent{})
+	pm.requestNewBlockProposalSub = pm.eventMux.Subscribe(core.RequestNewBlockProposalMessage{})
 	go pm.minedBroadcastLoop()
 	go pm.proposedBroadcastLoop()
 	go pm.validationMessagetLoop()
+	go pm.requestNewBlockProposalLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -429,6 +432,18 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		cache := pm.blockchain.GetDSGCache()
 		cache.InsertBlockProposal(proposal)
+
+	case msg.Code == RequestNewBlockProposalMsg:
+		log.Info("A new block proposal has been requested")
+		var requestProposal dsg.RequestNewBlockProposalMessage
+		if err := msg.Decode(&requestProposal); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
+		if requestProposal.Proposer == pm.etherbase {
+			log.Info("new block proposal request for me - I should broadcast my BP")
+		} else {
+			log.Trace("request is not for me. Ignore")
+		}
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
@@ -764,6 +779,22 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
+		// Request a new block proposal
+		newBlockNumber := big.NewInt(1)
+		newBlockNumber = newBlockNumber.Add(newBlockNumber, request.Block.Number())
+		nextEv, _ := dsg.EVSlot(newBlockNumber.Uint64())
+		nextEvAddress := dsg.EvAddressFromSlot(nextEv)
+
+		rbp := dsg.RequestNewBlockProposalMessage{
+			Number:    newBlockNumber,
+			Verifier:  pm.etherbase,
+			Proposer:  nextEvAddress,
+			Slot:      nextEv,
+			Signature: common.Hash{},
+		}
+		log.Info("New block processed. Request new BP:", "number", rbp.Number, "slot", rbp.Slot, "proposer", rbp.Proposer)
+		pm.BroadcastNewBlockProposalMessage(&rbp)
+
 	case msg.Code == TxMsg:
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
 		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
@@ -833,6 +864,27 @@ func (pm *ProtocolManager) AsyncBroadcastValidationMessage(validationMessage *ds
 	}
 }
 
+// Asynchronously broadcast a RequestNewBlockProposalMessage to all peers
+func (pm *ProtocolManager) AsyncBroadcastRequestNewBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) {
+	log.Info("Asynchronously Broadcasting Request New Block Proposal Message")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		peer.queuedRNBPs <- requestNewBlockProposalMessage
+	}
+}
+
+// Synchronously broadcast a requestNewBlockProposalMessage to all peers
+func (pm *ProtocolManager) BroadcastNewBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) {
+	log.Info("Broadcasting Request New Block Proposal Message")
+
+	peers := pm.peers.peers
+	for _, peer := range peers {
+		if err := peer.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
+			log.Info("Error broadcasting New Block Proposal message")
+		}
+	}
+}
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
 // will only announce it's availability (depending what's requested).
@@ -918,6 +970,15 @@ func (pm *ProtocolManager) validationMessagetLoop() {
 	for obj := range pm.validationMessageSub.Chan() {
 		if ev, ok := obj.Data.(core.NewValidationMessageEvent); ok {
 			pm.AsyncBroadcastValidationMessage(ev.ValidationMessage)
+		}
+	}
+}
+
+// Request new BP broadcast loop
+func (pm *ProtocolManager) requestNewBlockProposalLoop() {
+	for obj := range pm.requestNewBlockProposalSub.Chan() {
+		if ev, ok := obj.Data.(core.RequestNewBlockProposalMessage); ok {
+			pm.AsyncBroadcastRequestNewBlockProposalMessage(ev.RequestNewBlockProposalMessage)
 		}
 	}
 }

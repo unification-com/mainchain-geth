@@ -30,6 +30,15 @@ type ValidationMessage struct {
 	Authorize bool           `json:"authorize"  gencodec:"required"`
 }
 
+// RequestNewBlockProposalMessage is used when a new BP is required
+type RequestNewBlockProposalMessage struct {
+	Number    *big.Int       `json:"number"     gencodec:"required"`
+	Verifier  common.Address `json:"verifierId" gencodec:"required"`
+	Proposer  common.Address `json:"proposerId" gencodec:"required"`
+	Slot      uint64         `json:"slot" gencodec:"required"`
+	Signature common.Hash    `json:"signature"  gencodec:"required"`
+}
+
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
 		header.ParentHash,
@@ -125,13 +134,15 @@ func EVSlot(blockNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }
 
-func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address) ValidationMessage {
+func EvAddressFromSlot(evSlot uint64) common.Address {
+	return getAddressFromSlotNumber(evSlot)
+}
 
-	expectedProposer := cache.GetSlotForBlock(blockNum)
-	if expectedProposer == -1 {
-		expectedProposer, _ := EVSlot(blockNum.Uint64())
-		cache.TrackSlotForBlock(blockNum, expectedProposer)
-	}
+func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address) (ValidationMessage, RequestNewBlockProposalMessage, bool) {
+
+	rbp := RequestNewBlockProposalMessage{}
+	requestNewBp := false
+	expectedProposer, _ := EVSlot(blockNum.Uint64())
 
 	proposerAddress := getAddressFromSlotNumber(uint64(expectedProposer))
 	valid := false
@@ -140,14 +151,15 @@ func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Add
 
 	if err != nil {
 		log.Info("listen for block proposal error","err", err)
-
-		cache.TrackSlotForBlock(blockNum, uint64(expectedProposer) + 1) // TODO - wrap around to 0?
-
 		// TODO: Request send RequestNewBlockProposalMessage
+		evNext := expectedProposer + 1
+		evNextAddress := getAddressFromSlotNumber(evNext)
+		rbp = RequestNewBlockProposalMessage{Number: blockNum, Verifier: verifier, Proposer: evNextAddress, Slot: evNext, Signature: common.Hash{}}
+		requestNewBp = true
 	} else {
 		log.Info("listen success - found bp in cache and validating", "block", bp.Number, "proposer", bp.Proposer)
 		valid = bp.ValidateBlockProposal()
 	}
 	vm := ValidationMessage{Number: bp.Number, BlockHash: bp.BlockHash, Verifier: verifier, Proposer: bp.Proposer, Signature: common.Hash{}, Authorize:valid}
-	return vm
+	return vm, rbp, requestNewBp
 }

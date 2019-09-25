@@ -86,14 +86,15 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	knownTxs    mapset.Set                  // Set of transaction hashes known to be known by this peer
-	knownBlocks mapset.Set                  // Set of block hashes known to be known by this peer
-	queuedTxs   chan []*types.Transaction   // Queue of transactions to broadcast to the peer
-	queuedProps chan *propEvent             // Queue of blocks to broadcast to the peer
-	queuedAnns  chan *types.Block           // Queue of blocks to announce to the peer
-	queuedVMs   chan *dsg.ValidationMessage // Queue of Validation Messages to broadcast to the peer
-	queuedBPs   chan *dsg.BlockProposal     // Queue of Block Proposals to broadcast to the peer
-	term        chan struct{}               // Termination channel to stop the broadcaster
+	knownTxs    mapset.Set                               // Set of transaction hashes known to be known by this peer
+	knownBlocks mapset.Set                               // Set of block hashes known to be known by this peer
+	queuedTxs   chan []*types.Transaction                // Queue of transactions to broadcast to the peer
+	queuedProps chan *propEvent                          // Queue of blocks to broadcast to the peer
+	queuedAnns  chan *types.Block                        // Queue of blocks to announce to the peer
+	queuedVMs   chan *dsg.ValidationMessage              // Queue of Validation Messages to broadcast to the peer
+	queuedBPs   chan *dsg.BlockProposal                  // Queue of Block Proposals to broadcast to the peer
+	queuedRNBPs chan *dsg.RequestNewBlockProposalMessage // Queue of Request New Block Proposals to broadcast to peers
+	term        chan struct{}                            // Termination channel to stop the broadcaster
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -148,6 +149,11 @@ func (p *peer) broadcast() {
 				return
 			}
 			p.Log().Trace("Propagated Validation Message")
+		case requestNewBlockProposalMessage := <-p.queuedRNBPs:
+			if err := p.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
+				return
+			}
+			p.Log().Trace("Propagated New Block Proposal Message")
 
 		case <-p.term:
 			return
@@ -292,6 +298,11 @@ func (p *peer) SendNewBlockProposal(blockProposal *dsg.BlockProposal) error {
 // SendNewValidationMessage propagates a DSG Validation message over the network.
 func (p *peer) SendNewValidationMessage(validationMessage *dsg.ValidationMessage) error {
 	return p2p.Send(p.rw, ValidationMsg, validationMessage)
+}
+
+// SendNewRequestBlockProposalMessage propogates a DSG Request NEw Block Proposal message over the network
+func (p *peer) SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) error {
+	return p2p.Send(p.rw, RequestNewBlockProposalMsg, requestNewBlockProposalMessage)
 }
 
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
