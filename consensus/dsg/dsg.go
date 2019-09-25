@@ -127,14 +127,23 @@ func EVSlot(blockNumber uint64) (uint64, uint64) {
 
 func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Address) ValidationMessage {
 
-	expectedProposer, _ := EVSlot(blockNum.Uint64())
-	proposerAddress := getAddressFromSlotNumber(expectedProposer)
+	expectedProposer := cache.GetSlotForBlock(blockNum)
+	if expectedProposer == -1 {
+		expectedProposer, _ := EVSlot(blockNum.Uint64())
+		cache.TrackSlotForBlock(blockNum, expectedProposer)
+	}
+
+	proposerAddress := getAddressFromSlotNumber(uint64(expectedProposer))
 	valid := false
 
 	bp, err := cache.PollBlockProposalCache(blockNum, proposerAddress)
 
 	if err != nil {
 		log.Info("listen for block proposal error","err", err)
+
+		cache.TrackSlotForBlock(blockNum, uint64(expectedProposer) + 1) // TODO - wrap around to 0?
+
+		// TODO: Request send RequestNewBlockProposalMessage
 	} else {
 		log.Info("listen success - found bp in cache and validating", "block", bp.Number, "proposer", bp.Proposer)
 		valid = bp.ValidateBlockProposal()

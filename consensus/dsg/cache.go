@@ -12,11 +12,13 @@ import (
 const (
 	inmMemoryProposals  = 96   // Number of recent block proposals to keep in memory
 	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
+	inMemorySlots       = 48   // Number of slot orders to keep in memory
 )
 
 type Cache struct {
 	validations *lru.ARCCache
 	proposals   *lru.ARCCache
+	slots       *lru.ARCCache
 }
 
 type ValidationKey struct {
@@ -34,10 +36,12 @@ func NewCache() *Cache {
 
 	validations, _ := lru.NewARC(inMemoryValidations)
 	proposals, _ := lru.NewARC(inmMemoryProposals)
+	slots, _ := lru.NewARC(inMemorySlots)
 
 	cache := &Cache{
 		validations: validations,
 		proposals:   proposals,
+		slots:       slots,
 	}
 	return cache
 }
@@ -127,6 +131,22 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 	acknowledges := acks / totalSignersFloat
 	log.Info("acceptBlock", "num", blockNum, "proposer", proposer, "acks", acks)
 	return acknowledges >= requirement
+}
+
+func (d *Cache) TrackSlotForBlock(blockNumber *big.Int, currentTurn uint64) {
+	if _, ok := d.slots.Peek(blockNumber); ok {
+		d.slots.Remove(blockNumber)
+	}
+	d.slots.Add(blockNumber, currentTurn)
+}
+
+func (d *Cache) GetSlotForBlock(blockNumber *big.Int) int {
+	if turn, ok := d.slots.Peek(blockNumber); ok {
+		if turnUint, ok := turn.(uint64); ok {
+			return int(turnUint)
+		}
+	}
+	return -1
 }
 
 func (d *Cache) PollBlockProposalCache(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
