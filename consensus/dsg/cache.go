@@ -132,7 +132,7 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 func (d *Cache) PollBlockProposalCache(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
 	var blockProposal BlockProposal
 	log.Info("PollBlockProposalCache", "blockNum", blockNum, "proposer", proposer)
-	timeout := time.After(1000 * time.Millisecond)
+	timeout := time.After(10000 * time.Millisecond)
 	for {
 		select {
 		case <-timeout:

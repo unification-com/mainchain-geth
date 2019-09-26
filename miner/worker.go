@@ -148,6 +148,9 @@ type worker struct {
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
 
+	// DSG channels
+	bpListenChan       chan uint64
+
 	current      *environment                 // An environment for current running cycle.
 	localUncles  map[common.Hash]*types.Block // A set of side blocks generated locally as the possible uncle blocks.
 	remoteUncles map[common.Hash]*types.Block // A set of side blocks as the possible uncle blocks.
@@ -201,6 +204,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		startCh:            make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		bpListenChan:       make(chan uint64),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
@@ -222,6 +226,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	go worker.resultLoop()
 	go worker.taskLoop()
 	go worker.sealingBroadcastLoop()
+
+	go worker.dsgLoop()
 
 	// Submit first work to initialize pending state.
 	worker.startCh <- struct{}{}
@@ -562,12 +568,40 @@ func (w *worker) taskLoop() {
 
 			if !v {
 			    log.Info("The author may not propose this block")
-			    continue
+			    // not my turn, so I'll listen for the proposer's incoming BP for this block instead
+				w.bpListenChan <- blockProposal.Number.Uint64()
+
+			} else {
+				log.Info("⭐ The author may propose this block")
+
+				go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 			}
-			log.Info("⭐ The author may propose this block")
 
-			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 
+		case <-w.exitCh:
+			interrupt()
+			return
+		}
+	}
+}
+
+func (w *worker) dsgLoop() {
+	var (
+		stopCh chan struct{}
+	)
+
+	// interrupt aborts the in-flight sealing task.
+	interrupt := func() {
+		if stopCh != nil {
+			close(stopCh)
+			stopCh = nil
+		}
+	}
+	for {
+		select {
+		case blockNumber := <-w.bpListenChan:
+			// listen for incoming BP from the expected proposer - poll BP cache, and validate etc.
+			log.Info("I'm now listening for incoming BP for block number", "blockNumber", blockNumber)
 		case <-w.exitCh:
 			interrupt()
 			return
