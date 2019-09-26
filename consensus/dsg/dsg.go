@@ -151,7 +151,6 @@ func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Add
 
 	if err != nil {
 		log.Info("listen for block proposal error", "err", err)
-		// TODO: Request send RequestNewBlockProposalMessage
 		evNext := expectedProposer + 1
 		evNextAddress := getAddressFromSlotNumber(evNext)
 		rbp = RequestNewBlockProposalMessage{Number: blockNum, Verifier: verifier, Proposer: evNextAddress, Slot: evNext, Signature: common.Hash{}}
