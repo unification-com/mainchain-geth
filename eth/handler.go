@@ -433,6 +433,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		cache := pm.blockchain.GetDSGCache()
 		cache.InsertBlockProposal(proposal)
 
+		log.Info("validate proposal", "block", proposal.Number, "proposer", proposal.Proposer)
+
+		vm, rbp, sendReq := dsg.ListenForBlockProposal(cache, proposal.Number, pm.etherbase)
+		go pm.eventMux.Post(core.NewValidationMessageEvent{ValidationMessage: &vm})
+		if sendReq {
+			pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage:&rbp})
+		}
+
 	case msg.Code == RequestNewBlockProposalMsg:
 		log.Info("A new block proposal has been requested")
 		var requestProposal dsg.RequestNewBlockProposalMessage
