@@ -146,3 +146,29 @@ func (d *Cache) PollBlockProposalCache(blockNum *big.Int, proposer common.Addres
 		}
 	}
 }
+
+func (d *Cache) PollValidationMessageCache(blockNum *big.Int, proposer common.Address) (int, int) {
+	log.Info("PollValidationMessageCache", "blockNum", blockNum, "proposer", proposer)
+	timeout := time.After(1000 * time.Millisecond)
+	acks, nacks := 0, common.NumSignersInRound
+	for {
+		select {
+		case <-timeout:
+			return acks, nacks
+		default:
+			acks, nacks = 0, common.NumSignersInRound
+			// keep querying cache until timeout reached
+			var validationMessage ValidationMessage
+			for _, key := range d.validations.Keys() {
+				if vm, ok := d.validations.Get(key); ok {
+					if validationMessage, ok = vm.(ValidationMessage); ok {
+						if (validationMessage.Number.Uint64() == blockNum.Uint64()) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
+							acks = acks + 1
+							nacks = nacks - 1
+						}
+					}
+				}
+			}
+		}
+	}
+}
