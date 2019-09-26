@@ -17,7 +17,7 @@ type BlockProposal struct {
 	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
 	ProposedBlock *types.Block   `json:"block"      gencodec:"required"`
 	Signature     common.Hash    `json:"sig"        gencodec:"required"`
-	Proposer      common.Address `json:"proposer"    gencodec:"required"`
+	Proposer      common.Address `json:"proposer"   gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
@@ -35,7 +35,7 @@ type RequestNewBlockProposalMessage struct {
 	Number    *big.Int       `json:"number"     gencodec:"required"`
 	Verifier  common.Address `json:"verifierId" gencodec:"required"`
 	Proposer  common.Address `json:"proposerId" gencodec:"required"`
-	Slot      uint64         `json:"slot" gencodec:"required"`
+	Slot      uint64         `json:"slot"       gencodec:"required"`
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 
@@ -150,7 +150,7 @@ func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Add
 	bp, err := cache.PollBlockProposalCache(blockNum, proposerAddress)
 
 	if err != nil {
-		log.Info("listen for block proposal error","err", err)
+		log.Info("listen for block proposal error", "err", err)
 		// TODO: Request send RequestNewBlockProposalMessage
 		evNext := expectedProposer + 1
 		evNextAddress := getAddressFromSlotNumber(evNext)
@@ -160,6 +160,6 @@ func ListenForBlockProposal(cache *Cache, blockNum *big.Int, verifier common.Add
 		log.Info("listen success - found bp in cache and validating", "block", bp.Number, "proposer", bp.Proposer)
 		valid = bp.ValidateBlockProposal()
 	}
-	vm := ValidationMessage{Number: bp.Number, BlockHash: bp.BlockHash, Verifier: verifier, Proposer: bp.Proposer, Signature: common.Hash{}, Authorize:valid}
+	vm := ValidationMessage{Number: bp.Number, BlockHash: bp.BlockHash, Verifier: verifier, Proposer: bp.Proposer, Signature: common.Hash{}, Authorize: valid}
 	return vm, rbp, requestNewBp
 }
