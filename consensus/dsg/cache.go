@@ -6,6 +6,7 @@ import (
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/log"
 	"math/big"
+	"sync"
 )
 
 const (
@@ -14,8 +15,11 @@ const (
 )
 
 type Cache struct {
-	validations *lru.ARCCache
-	proposals   *lru.ARCCache
+	validations     *lru.ARCCache
+	proposals       *lru.ARCCache
+
+	invalidCounter   uint64 // counter for tracking invalid BPs, including BP/VM msg timeouts. Resets with each block commit
+	invalidCounterMu sync.RWMutex
 }
 
 type ValidationKey struct {
@@ -35,8 +39,9 @@ func NewCache() *Cache {
 	proposals, _ := lru.NewARC(inmMemoryProposals)
 
 	cache := &Cache{
-		validations: validations,
-		proposals:   proposals,
+		validations:    validations,
+		proposals:      proposals,
+		invalidCounter: 0,
 	}
 	return cache
 }
@@ -124,4 +129,31 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 	acknowledges := acks / totalSignersFloat
 	log.Info("acceptBlock", "num", blockNum, "proposer", proposer, "acks", acks)
 	return acknowledges >= requirement
+}
+
+// IncrementInvalidCounter is used to increase the timeoutCounter for a block.
+// It can be called when an EV times out waiting for a new BP, when a BP is
+// considered invalid according to consensus, or when waiting for 2/3 ACKs times out
+func (d *Cache) IncrementInvalidCounter() {
+	d.invalidCounterMu.Lock()
+	defer d.invalidCounterMu.Unlock()
+
+	d.invalidCounter = d.invalidCounter + 1
+}
+
+// ResetInvalidCounter is used to reset the timeoutCounter when a block has been committed
+// so the tracking can begin again for the next block proposal(s)
+func (d *Cache) ResetInvalidCounter() {
+	d.invalidCounterMu.Lock()
+	defer d.invalidCounterMu.Unlock()
+
+	d.invalidCounter = 0
+}
+
+// GetInvalidCounter is used to get the current timeoutCounter value
+func (d *Cache) GetInvalidCounter() uint64 {
+	d.invalidCounterMu.RLock()
+	defer d.invalidCounterMu.RUnlock()
+
+	return d.invalidCounter
 }
