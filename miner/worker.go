@@ -561,7 +561,10 @@ func (w *worker) taskLoop() {
 			}
 			log.Info("⭐ The author may produce this block")
 
-			blockProposal := dsg.ProposeBlock(task.block, w.config.Etherbase)
+			parent := w.chain.GetHeaderByHash(task.block.ParentHash())
+			newBlock := dsg.SetSlotNumber(*parent, task.block)
+
+			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
 			cache := w.chain.GetDSGCache()
 			cache.InsertBlockProposal(blockProposal)
 

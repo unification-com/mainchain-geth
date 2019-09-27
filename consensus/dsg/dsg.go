@@ -119,6 +119,17 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	return v, nil
 }
 
+func SetSlotNumber(parentHeader types.Header, block *types.Block) *types.Block {
+	//TODO: The numTimeouts needs to probably come from the cache
+	numTimeouts := uint64(0)
+
+	header := block.Header()
+	header.SlotCount = parentHeader.SlotCount + 1 + numTimeouts
+	newBlock := block.WithSeal(header)
+
+	return newBlock
+}
+
 func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) (uint64, uint64) {
 	var blockNumberBase0 = blockNumber - 1
 	var blockIndex = blockNumberBase0 % blocksInEpoch
