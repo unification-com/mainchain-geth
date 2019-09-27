@@ -120,11 +120,16 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 }
 
 func SetSlotNumber(parentHeader types.Header, block *types.Block) *types.Block {
+	// if parent was genesis, use 0 as parentSlotCount
+	parentSlotCount := uint64(0)
+	if block.Number().Cmp(big.NewInt(1)) == 1 {
+		parentSlotCount = parentHeader.SlotCount
+	}
 	//TODO: The numTimeouts needs to probably come from the cache
 	numTimeouts := uint64(0)
 
 	header := block.Header()
-	header.SlotCount = parentHeader.SlotCount + 1 + numTimeouts
+	header.SlotCount = parentSlotCount + 1 + numTimeouts
 	newBlock := block.WithSeal(header)
 
 	return newBlock
