@@ -5,9 +5,11 @@ import (
 	"github.com/unification-com/mainchain/log"
 )
 
-func (bp *BlockProposal) ValidateBlockProposal() bool {
+func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache *Cache) bool {
+	numTimeouts := cache.GetInvalidCounter()
+	currentSlot := parentHeader.SlotCount + 1 + numTimeouts
 
-	expectedSignerIndex, _ := EVSlot(bp.Number.Uint64())
+	expectedSignerIndex, _ := EVSlot(currentSlot)
 	actualSignerIndex := EVIdFromEtherbase(bp.Proposer)
 
 	if expectedSignerIndex != actualSignerIndex {
