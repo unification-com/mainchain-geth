@@ -221,7 +221,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	go worker.newWorkLoop(recommit)
 	go worker.resultLoop()
 	go worker.taskLoop()
-	go worker.sealingBroadcastLoop()
 
 	// Submit first work to initialize pending state.
 	worker.startCh <- struct{}{}
@@ -287,20 +286,6 @@ func (w *worker) isRunning() bool {
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
 	close(w.exitCh)
-}
-
-func (w *worker) sealingBroadcastLoop() {
-	var (
-		stopCh chan struct{}
-	)
-
-	for obj := range w.verifiedBlockSub.Chan() {
-		if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
-			if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
-				log.Warn("Block sealing failed", "err", err)
-			}
-		}
-	}
 }
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
@@ -532,6 +517,12 @@ func (w *worker) taskLoop() {
 	}
 	for {
 		select {
+		case obj := <-w.verifiedBlockSub.Chan():
+			if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
+				if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
+					log.Warn("Block sealing failed", "err", err)
+				}
+			}
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
