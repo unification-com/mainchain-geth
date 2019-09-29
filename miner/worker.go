@@ -537,22 +537,30 @@ func (w *worker) taskLoop() {
 					log.Warn("Block sealing failed", "err", err)
 				}
 			}
+
 		case obj := <-w.newBlockValidSub.Chan():
 			if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
 				log.Info("NewBlockValidatedEvent", "ev", ev)
 				timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
 			}
+
 		case obj := <-w.newBlockPropoSub.Chan():
 			if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
 				log.Info("NewBlockProposalFoundEvent", "ev", ev)
 				validationTimeout.Reset(validationTimeoutDuration)
 				timeoutBlockProposal.Stop()
 			}
+
 		case timeoutBlockProposalFire := <-timeoutBlockProposal.C:
 			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
 			cache := w.chain.GetDSGCache()
 			cache.IncrementInvalidCounter()
-			//TODO: Send BlockProposalRequired
+
+			rbp := dsg.RequestNewBlockProposalMessage{
+				//TODO: Populate
+				Signature: common.Hash{},
+			}
+			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 		case validationTimeoutFire := <-validationTimeout.C:
 			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
@@ -560,7 +568,12 @@ func (w *worker) taskLoop() {
 			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
 			cache.IncrementInvalidCounter()
 			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-			//TODO: Send BlockProposalRequired
+
+			rbp := dsg.RequestNewBlockProposalMessage{
+				//TODO: Populate
+				Signature: common.Hash{},
+			}
+			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
