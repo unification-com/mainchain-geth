@@ -33,7 +33,13 @@ type PendingLogsEvent struct {
 // NewMinedBlockEvent is posted when a block has been imported.
 type NewMinedBlockEvent struct{ Block *types.Block }
 
-// NewBlockProposalEvent
+// NewBlockValidatedEvent: used to manager timeouts
+type NewBlockValidatedEvent struct{ }
+
+// NewBlockProposalFoundEvent: used to manage timeouts
+type NewBlockProposalFoundEvent struct{ }
+
+// NewBlockProposalEvent: used to instruct the ProtocolManager to send a BlockProposal
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 
 // BlockVerifiedEvent

@@ -425,6 +425,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		parentHeader := pm.blockchain.CurrentHeader()
 		valid := proposal.ValidateBlockProposal(parentHeader, cache)
 
+		go pm.eventMux.Post(core.NewBlockProposalFoundEvent{})
+
 		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
 
@@ -743,6 +745,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
 		pm.fetcher.Enqueue(p.id, request.Block)
+
+		go pm.eventMux.Post(core.NewBlockValidatedEvent{})
 
 		// Assuming the block is importable by the peer, but possibly not yet done so,
 		// calculate the head hash and TD that the peer truly must have.

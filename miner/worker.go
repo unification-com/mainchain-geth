@@ -138,6 +138,8 @@ type worker struct {
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
 	verifiedBlockSub *event.TypeMuxSubscription
+	newBlockValidSub *event.TypeMuxSubscription
+	newBlockPropoSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -163,6 +165,10 @@ type worker struct {
 	snapshotMu    sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock *types.Block
 	snapshotState *state.StateDB
+
+	// Timers
+	timeoutBlockProposal time.Timer
+	validationTimeout time.Timer
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -209,6 +215,8 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
 	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
+	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
+	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -515,6 +523,12 @@ func (w *worker) taskLoop() {
 			stopCh = nil
 		}
 	}
+	validationTimeoutDuration := 60 * time.Second
+	blockProposalTimeoutDuration := 60 * time.Second
+
+	timeoutBlockProposal := time.NewTimer(blockProposalTimeoutDuration)
+	validationTimeout := time.NewTimer(validationTimeoutDuration)
+
 	for {
 		select {
 		case obj := <-w.verifiedBlockSub.Chan():
@@ -523,6 +537,31 @@ func (w *worker) taskLoop() {
 					log.Warn("Block sealing failed", "err", err)
 				}
 			}
+		case obj := <-w.newBlockValidSub.Chan():
+			if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
+				log.Info("NewBlockValidatedEvent", "ev", ev)
+				timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			}
+		case obj := <-w.newBlockPropoSub.Chan():
+			if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
+				log.Info("NewBlockProposalFoundEvent", "ev", ev)
+				validationTimeout.Reset(validationTimeoutDuration)
+				timeoutBlockProposal.Stop()
+			}
+		case timeoutBlockProposalFire := <-timeoutBlockProposal.C:
+			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
+			cache := w.chain.GetDSGCache()
+			cache.IncrementInvalidCounter()
+			//TODO: Send BlockProposalRequired
+
+		case validationTimeoutFire := <-validationTimeout.C:
+			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
+			cache := w.chain.GetDSGCache()
+			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
+			cache.IncrementInvalidCounter()
+			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			//TODO: Send BlockProposalRequired
+
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
