@@ -511,6 +511,11 @@ func (w *worker) mainLoop() {
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
 // push them to consensus engine.
 func (w *worker) taskLoop() {
+
+	defer w.verifiedBlockSub.Unsubscribe()
+	defer w.newBlockValidSub.Unsubscribe()
+	defer w.newBlockPropoSub.Unsubscribe()
+
 	var (
 		stopCh chan struct{}
 		prev   common.Hash
@@ -532,23 +537,29 @@ func (w *worker) taskLoop() {
 	for {
 		select {
 		case obj := <-w.verifiedBlockSub.Chan():
-			if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
-				if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
-					log.Warn("Block sealing failed", "err", err)
+			if obj != nil {
+				if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
+					if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
+						log.Warn("Block sealing failed", "err", err)
+					}
 				}
 			}
 
 		case obj := <-w.newBlockValidSub.Chan():
-			if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
-				log.Info("NewBlockValidatedEvent", "ev", ev)
-				timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			if obj != nil {
+				if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
+					log.Info("NewBlockValidatedEvent", "ev", ev)
+					timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+				}
 			}
 
 		case obj := <-w.newBlockPropoSub.Chan():
-			if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
-				log.Info("NewBlockProposalFoundEvent", "ev", ev)
-				validationTimeout.Reset(validationTimeoutDuration)
-				timeoutBlockProposal.Stop()
+			if obj != nil {
+				if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
+					log.Info("NewBlockProposalFoundEvent", "ev", ev)
+					validationTimeout.Reset(validationTimeoutDuration)
+					timeoutBlockProposal.Stop()
+				}
 			}
 
 		case timeoutBlockProposalFire := <-timeoutBlockProposal.C:
@@ -595,19 +606,18 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
 
-			statedb, _ := w.chain.State()
+			cache := w.chain.GetDSGCache()
+			numInvalids := cache.GetInvalidCounter()
 
-			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
+			parent := w.chain.CurrentHeader()
+			v := dsg.Authorized(*parent, numInvalids, w.coinbase)
+
 			if !v {
 				log.Info("The author may not produce this block")
 				continue
 			}
 			log.Info("⭐ The author may produce this block")
 
-			cache := w.chain.GetDSGCache()
-			numInvalids := cache.GetInvalidCounter()
-
-			parent := w.chain.GetHeaderByHash(task.block.ParentHash())
 			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
 
 			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)

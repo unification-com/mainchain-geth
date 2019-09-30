@@ -163,11 +163,6 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
-	filter := func(block types.Block) bool {
-		statedb, _ := manager.blockchain.State()
-		val, _ := dsg.DSGFilter(statedb, block)
-		return val
-	}
 	inserter := func(blocks types.Blocks) (int, error) {
 		// If sync hasn't reached the checkpoint yet, deny importing weird blocks.
 		//
@@ -194,7 +189,7 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		}
 		return n, err
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer, filter)
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
 
 	return manager, nil
 }
