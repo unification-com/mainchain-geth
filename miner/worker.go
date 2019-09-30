@@ -628,16 +628,16 @@ func (w *worker) taskLoop() {
 			parent := w.chain.CurrentHeader()
 			v := dsg.Authorized(*parent, numInvalids, w.coinbase)
 
+			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
+
+			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
+			cache.InsertBlockProposal(blockProposal)
+
 			if !v {
 				log.Info("The author may not produce this block")
 				continue
 			}
 			log.Info("⭐ The author may produce this block")
-
-			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
-
-			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
-			cache.InsertBlockProposal(blockProposal)
 
 			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
 
