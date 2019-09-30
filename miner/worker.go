@@ -75,6 +75,10 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	// DSG Timouts
+	validationTimeoutDuration = 60 * time.Second
+	blockProposalTimeoutDuration = 30 * time.Second
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -167,8 +171,8 @@ type worker struct {
 	snapshotState *state.StateDB
 
 	// Timers
-	timeoutBlockProposal time.Timer
-	validationTimeout time.Timer
+	timeoutBlockProposal *time.Timer
+	validationTimeout *time.Timer
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -217,6 +221,9 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
 	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
 	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
+
+	worker.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
+	worker.validationTimeout = time.NewTimer(validationTimeoutDuration)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -528,11 +535,6 @@ func (w *worker) taskLoop() {
 			stopCh = nil
 		}
 	}
-	validationTimeoutDuration := 60 * time.Second
-	blockProposalTimeoutDuration := 60 * time.Second
-
-	timeoutBlockProposal := time.NewTimer(blockProposalTimeoutDuration)
-	validationTimeout := time.NewTimer(validationTimeoutDuration)
 
 	for {
 		select {
@@ -549,7 +551,7 @@ func (w *worker) taskLoop() {
 			if obj != nil {
 				if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
 					log.Info("NewBlockValidatedEvent", "ev", ev)
-					timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+					w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
 				}
 			}
 
@@ -557,18 +559,18 @@ func (w *worker) taskLoop() {
 			if obj != nil {
 				if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
 					log.Info("NewBlockProposalFoundEvent", "ev", ev)
-					validationTimeout.Reset(validationTimeoutDuration)
-					timeoutBlockProposal.Stop()
+					w.validationTimeout.Reset(validationTimeoutDuration)
+					w.timeoutBlockProposal.Stop()
 				}
 			}
 
-		case timeoutBlockProposalFire := <-timeoutBlockProposal.C:
+		case timeoutBlockProposalFire := <-w.timeoutBlockProposal.C:
 			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
 			cache := w.chain.GetDSGCache()
 			cache.IncrementInvalidCounter()
 
-			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-			validationTimeout.Reset(validationTimeoutDuration)
+			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			w.validationTimeout.Reset(validationTimeoutDuration)
 
 			reqeustBlockNumber := big.NewInt(1)
 			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
@@ -578,15 +580,16 @@ func (w *worker) taskLoop() {
 				Verifier: w.coinbase,
 				Signature: common.Hash{},
 			}
+			log.Info("request new block proposal", "num", rbp.Number)
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
-		case validationTimeoutFire := <-validationTimeout.C:
+		case validationTimeoutFire := <-w.validationTimeout.C:
 			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
 			cache := w.chain.GetDSGCache()
 			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
 			cache.IncrementInvalidCounter()
-			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-			validationTimeout.Reset(validationTimeoutDuration)
+			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			w.validationTimeout.Reset(validationTimeoutDuration)
 
 			reqeustBlockNumber := big.NewInt(1)
 			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
@@ -596,6 +599,7 @@ func (w *worker) taskLoop() {
 				Verifier: w.coinbase,
 				Signature: common.Hash{},
 			}
+			log.Info("request new block proposal", "num", rbp.Number)
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 		case task := <-w.taskCh:
