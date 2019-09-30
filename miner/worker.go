@@ -567,8 +567,12 @@ func (w *worker) taskLoop() {
 			cache := w.chain.GetDSGCache()
 			cache.IncrementInvalidCounter()
 
+			reqeustBlockNumber := big.NewInt(1)
+			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
+
 			rbp := dsg.RequestNewBlockProposalMessage{
-				//TODO: Populate
+				Number: reqeustBlockNumber,
+				Verifier: w.coinbase,
 				Signature: common.Hash{},
 			}
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
@@ -580,8 +584,12 @@ func (w *worker) taskLoop() {
 			cache.IncrementInvalidCounter()
 			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
 
+			reqeustBlockNumber := big.NewInt(1)
+			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
+
 			rbp := dsg.RequestNewBlockProposalMessage{
-				//TODO: Populate
+				Number: reqeustBlockNumber,
+				Verifier: w.coinbase,
 				Signature: common.Hash{},
 			}
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})

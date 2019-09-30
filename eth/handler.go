@@ -435,7 +435,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&requestProposal); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		if requestProposal.Proposer == pm.etherbase {
+		cache := pm.blockchain.GetDSGCache()
+		numInvalids := cache.GetInvalidCounter()
+
+		parent := pm.blockchain.CurrentHeader()
+		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
+		if v {
 			log.Info("new block proposal request for me - I should broadcast my BP")
 		} else {
 			log.Trace("request is not for me. Ignore")
@@ -780,17 +785,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Request a new block proposal
 		newBlockNumber := big.NewInt(1)
 		newBlockNumber = newBlockNumber.Add(newBlockNumber, request.Block.Number())
-		nextEv, _ := dsg.EVSlot(newBlockNumber.Uint64())
-		nextEvAddress := common.Address{} //TODO: Fix me
 
 		rbp := dsg.RequestNewBlockProposalMessage{
 			Number:    newBlockNumber,
 			Verifier:  pm.etherbase,
-			Proposer:  nextEvAddress,
-			Slot:      nextEv,
 			Signature: common.Hash{},
 		}
-		log.Info("New block processed. Request new BP:", "number", rbp.Number, "slot", rbp.Slot, "proposer", rbp.Proposer)
+		log.Info("New block processed. Request new BP:", "number", rbp.Number)
 		pm.BroadcastNewBlockProposalMessage(&rbp)
 
 	case msg.Code == TxMsg:
@@ -879,7 +880,7 @@ func (pm *ProtocolManager) BroadcastNewBlockProposalMessage(requestNewBlockPropo
 	peers := pm.peers.peers
 	for _, peer := range peers {
 		if err := peer.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
-			log.Info("Error broadcasting New Block Proposal message")
+			log.Info("Error broadcasting Request New Block Proposal message")
 		}
 	}
 }

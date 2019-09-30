@@ -30,8 +30,6 @@ type ValidationMessage struct {
 type RequestNewBlockProposalMessage struct {
 	Number    *big.Int       `json:"number"     gencodec:"required"`
 	Verifier  common.Address `json:"verifierId" gencodec:"required"`
-	Proposer  common.Address `json:"proposerId" gencodec:"required"`
-	Slot      uint64         `json:"slot"       gencodec:"required"`
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 

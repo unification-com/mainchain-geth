@@ -153,7 +153,7 @@ func (p *peer) broadcast() {
 			if err := p.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
 				return
 			}
-			p.Log().Trace("Propagated New Block Proposal Message")
+			p.Log().Trace("Propagated Request New Block Proposal Message")
 
 		case <-p.term:
 			return
