@@ -792,6 +792,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			Signature: common.Hash{},
 		}
 		log.Info("New block processed. Request new BP:", "number", rbp.Number)
+		cache := pm.blockchain.GetDSGCache()
+		cache.ResetInvalidCounter()
+		
 		pm.BroadcastNewBlockProposalMessage(&rbp)
 
 	case msg.Code == TxMsg:
