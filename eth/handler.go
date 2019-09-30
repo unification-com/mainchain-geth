@@ -442,8 +442,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
 		if v {
 			log.Info("new block proposal request for me - I should broadcast my BP")
+			bp, err := cache.GetBlockProposal(requestProposal.Number, pm.etherbase)
+
+			newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
+
+			blockProposal := dsg.ProposeBlock(newBlock, pm.etherbase)
+
+			if err != nil {
+				log.Info("error - could not find my bp in cache", "num", requestProposal.Number, "err", err)
+			} else {
+				log.Info("found my cached bp - sending proposal to peers")
+				pm.AsyncBroadcastBlockProposal(&blockProposal)
+			}
 		} else {
-			log.Trace("request is not for me. Ignore")
+			log.Trace("request is not for me. Ignore request")
 		}
 
 	// Block header query, collect the requested headers and reply
@@ -794,7 +806,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		log.Info("New block processed. Request new BP:", "number", rbp.Number)
 		cache := pm.blockchain.GetDSGCache()
 		cache.ResetInvalidCounter()
-		
+
 		pm.BroadcastNewBlockProposalMessage(&rbp)
 
 	case msg.Code == TxMsg:
