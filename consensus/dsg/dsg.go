@@ -119,22 +119,36 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	return v, nil
 }
 
-func EVSlotInternal(blockNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) (uint64, uint64) {
-	var blockNumberBase0 = blockNumber - 1
-	var blockIndex = blockNumberBase0 % blocksInEpoch
-	var epochNumber = blockNumberBase0 / blocksInEpoch
+func SetSlotNumber(parentHeader types.Header, block *types.Block, numInvalids uint64) *types.Block {
+	// if parent was genesis, use 0 as parentSlotCount
+	parentSlotCount := uint64(0)
+	if block.Number().Cmp(big.NewInt(1)) == 1 {
+		parentSlotCount = parentHeader.SlotCount
+	}
 
-	var quadrant = blockIndex / (blocksInEpoch / numRounds)
+	header := block.Header()
+	header.SlotCount = parentSlotCount + 1 + numInvalids
+	newBlock := block.WithSeal(header)
+
+	return newBlock
+}
+
+func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) (uint64, uint64) {
+	var slotNumberBase0 = slotNumber - 1
+	var slotIndex = slotNumberBase0 % blocksInEpoch
+	var epochNumber = slotNumberBase0 / blocksInEpoch
+
+	var quadrant = slotIndex / (blocksInEpoch / numRounds)
 	var numSignersInQuadrant = numSigners / numRounds
 	var factor = numSigners / numRounds
-	var position = blockIndex % numSignersInQuadrant
+	var position = slotIndex % numSignersInQuadrant
 	var signerIndex = quadrant*factor + (position + 1)
 
 	return signerIndex - 1, epochNumber
 }
 
-// The base 0 signer index for a given block number
-// where the genesis block is block 0, and the current Epoch
-func EVSlot(blockNumber uint64) (uint64, uint64) {
-	return EVSlotInternal(blockNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+// The base 0 signer index for a given slot number
+// where the genesis block is slot 0, and the current Epoch
+func EVSlot(slotNumber uint64) (uint64, uint64) {
+	return EVSlotInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }

@@ -421,8 +421,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&proposal); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
-		valid := proposal.ValidateBlockProposal()
+		cache := pm.blockchain.GetDSGCache()
+		parentHeader := pm.blockchain.CurrentHeader()
+		valid := proposal.ValidateBlockProposal(parentHeader, cache)
 
 		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
 		pm.AsyncBroadcastValidationMessage(&vm)
