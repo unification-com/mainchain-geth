@@ -595,19 +595,18 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
 
-			statedb, _ := w.chain.State()
+			cache := w.chain.GetDSGCache()
+			numInvalids := cache.GetInvalidCounter()
 
-			v, _ := dsg.DSGSeal(statedb, task.block, w.config.Etherbase)
+			parent := w.chain.CurrentHeader()
+			v := dsg.Authorized(*parent, numInvalids, w.coinbase)
+
 			if !v {
 				log.Info("The author may not produce this block")
 				continue
 			}
 			log.Info("⭐ The author may produce this block")
 
-			cache := w.chain.GetDSGCache()
-			numInvalids := cache.GetInvalidCounter()
-
-			parent := w.chain.GetHeaderByHash(task.block.ParentHash())
 			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
 
 			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)

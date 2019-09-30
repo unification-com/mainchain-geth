@@ -106,12 +106,6 @@ func valid(statedb *state.StateDB, blockNumber uint64, signer common.Address) bo
 	return allowed == signer
 }
 
-func DSGSeal(statedb *state.StateDB, block *types.Block, signer common.Address) (bool, error) {
-	v := valid(statedb, block.Number().Uint64(), signer)
-
-	return v, nil
-}
-
 func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	extraSeal := 65
 	header := block.Header()
@@ -126,6 +120,15 @@ func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
 	v := valid(statedb, block.Number().Uint64(), signer)
 	return v, nil
+}
+
+func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.Address) bool {
+	slot := parentHeader.SlotCount + 1 + numInvalids
+
+	expectedSignerIndex, _ := EVSlot(slot)
+	actualSignerIndex := EVIdFromEtherbase(etherbase)
+
+	return expectedSignerIndex == actualSignerIndex
 }
 
 func SetSlotNumber(parentHeader types.Header, block *types.Block, numInvalids uint64) *types.Block {
