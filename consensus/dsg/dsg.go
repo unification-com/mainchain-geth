@@ -31,6 +31,15 @@ type ValidationMessage struct {
 	Authorize bool           `json:"authorize"  gencodec:"required"`
 }
 
+// RequestNewBlockProposalMessage is used when a new BP is required
+type RequestNewBlockProposalMessage struct {
+	Number    *big.Int       `json:"number"     gencodec:"required"`
+	Verifier  common.Address `json:"verifierId" gencodec:"required"`
+	Proposer  common.Address `json:"proposerId" gencodec:"required"`
+	Slot      uint64         `json:"slot" gencodec:"required"`
+	Signature common.Hash    `json:"signature"  gencodec:"required"`
+}
+
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	err := rlp.Encode(w, []interface{}{
 		header.ParentHash,
