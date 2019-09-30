@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/unification-com/mainchain/consensus/dsg"
+	"github.com/unification-com/mainchain/log"
 	"math/big"
 	"sync"
 	"time"
@@ -110,6 +111,7 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		queuedAnns:  make(chan *types.Block, maxQueuedAnns),
 		queuedVMs:   make(chan *dsg.ValidationMessage),
 		queuedBPs:   make(chan *dsg.BlockProposal),
+		queuedRNBPs: make(chan *dsg.RequestNewBlockProposalMessage),
 		term:        make(chan struct{}),
 	}
 }
@@ -151,6 +153,7 @@ func (p *peer) broadcast() {
 			p.Log().Trace("Propagated Validation Message")
 		case requestNewBlockProposalMessage := <-p.queuedRNBPs:
 			if err := p.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
+				log.Info("error asynchronously sending request new bp message", "err", err)
 				return
 			}
 			p.Log().Trace("Propagated Request New Block Proposal Message")
