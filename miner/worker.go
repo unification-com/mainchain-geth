@@ -567,6 +567,9 @@ func (w *worker) taskLoop() {
 			cache := w.chain.GetDSGCache()
 			cache.IncrementInvalidCounter()
 
+			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			validationTimeout.Reset(validationTimeoutDuration)
+
 			reqeustBlockNumber := big.NewInt(1)
 			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
 
@@ -583,6 +586,7 @@ func (w *worker) taskLoop() {
 			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
 			cache.IncrementInvalidCounter()
 			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			validationTimeout.Reset(validationTimeoutDuration)
 
 			reqeustBlockNumber := big.NewInt(1)
 			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
