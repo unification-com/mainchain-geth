@@ -2,13 +2,8 @@ package dsg
 
 import (
 	"github.com/unification-com/mainchain/common"
-	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
-	"github.com/unification-com/mainchain/crypto"
 	"github.com/unification-com/mainchain/log"
-	"github.com/unification-com/mainchain/rlp"
-	"golang.org/x/crypto/sha3"
-	"io"
 	"math/big"
 )
 
@@ -40,29 +35,6 @@ type RequestNewBlockProposalMessage struct {
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 
-func encodeSigHeader(w io.Writer, header *types.Header) {
-	err := rlp.Encode(w, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
-		header.MixDigest,
-		header.Nonce,
-	})
-	if err != nil {
-		panic("can't encode: " + err.Error())
-	}
-}
-
 func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
 	log.Info("Propose block #", "num", block.Number().String())
@@ -76,50 +48,6 @@ func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 	}
 
 	return proposedBlock
-}
-
-func SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	encodeSigHeader(hasher, header)
-	hasher.Sum(hash[:0])
-	return hash
-}
-
-func getTurn(blockNumber uint64) uint64 {
-	d := blockNumber - 1
-	turn := d % common.NumSignersInRound
-	return turn
-}
-
-func valid(statedb *state.StateDB, blockNumber uint64, signer common.Address) bool {
-	turn := getTurn(blockNumber)
-
-	var whitelist []common.Address
-
-	for i := 0; i < common.NumSignersInRound; i++ {
-		keyhash := statedb.GetState(common.HexToAddress(common.DSG), common.BigToHash(big.NewInt(int64(i))))
-		whitelist = append(whitelist, common.BytesToAddress(keyhash[:]))
-	}
-
-	allowed := whitelist[turn]
-
-	return allowed == signer
-}
-
-func DSGFilter(statedb *state.StateDB, block types.Block) (bool, error) {
-	extraSeal := 65
-	header := block.Header()
-	signature := header.Extra[len(header.Extra)-extraSeal:]
-
-	// Recover the public key and the Ethereum address
-	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
-	if err != nil {
-		return false, err
-	}
-	var signer common.Address
-	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-	v := valid(statedb, block.Number().Uint64(), signer)
-	return v, nil
 }
 
 func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.Address) bool {
