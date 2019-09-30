@@ -13,7 +13,7 @@ type BlockProposal struct {
 	BlockHash     common.Hash    `json:"blockHash"  gencodec:"required"`
 	ProposedBlock *types.Block   `json:"block"      gencodec:"required"`
 	Signature     common.Hash    `json:"sig"        gencodec:"required"`
-	Proposer      common.Address `json:"proposer"    gencodec:"required"`
+	Proposer      common.Address `json:"proposer"   gencodec:"required"`
 }
 
 // ValidationMessage represents a validation message in DSG.
@@ -31,7 +31,7 @@ type RequestNewBlockProposalMessage struct {
 	Number    *big.Int       `json:"number"     gencodec:"required"`
 	Verifier  common.Address `json:"verifierId" gencodec:"required"`
 	Proposer  common.Address `json:"proposerId" gencodec:"required"`
-	Slot      uint64         `json:"slot" gencodec:"required"`
+	Slot      uint64         `json:"slot"       gencodec:"required"`
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 
