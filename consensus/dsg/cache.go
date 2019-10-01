@@ -4,7 +4,6 @@ import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
-	"github.com/unification-com/mainchain/log"
 	"math/big"
 	"sync"
 )
@@ -104,7 +103,6 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
 		Proposer:  p,
 	}
 
-	log.Info("insertValidationMessage", "block", key.BlockNum, "proposer", key.Proposer, "validator", key.Validator, "authorise", msg.Authorize)
 	d.validations.Add(key, msg)
 
 	return d.acceptBlock(n, p)
@@ -127,7 +125,6 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 	totalSignersFloat := float64(common.NumSignersInRound)
 	requirement := float64(2) / totalSignersFloat
 	acknowledges := acks / totalSignersFloat
-	log.Info("acceptBlock", "num", blockNum, "proposer", proposer, "acks", acks)
 	return acknowledges >= requirement
 }
 

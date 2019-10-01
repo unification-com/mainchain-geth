@@ -446,7 +446,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			bp, err := cache.GetBlockProposal(requestProposal.Number, pm.etherbase)
 
 			if err != nil {
-				log.Info("error - could not find my bp in cache", "num", requestProposal.Number, "err", err)
+				log.Info(" error - could not find my bp in cache", "num", requestProposal.Number, "err", err, "etherbase", pm.etherbase)
 			} else {
 				log.Info("found my cached bp - sending proposal to peers")
 				newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)

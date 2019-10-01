@@ -9,6 +9,7 @@ func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache
 	numTimeouts := cache.GetInvalidCounter()
 	currentSlot := parentHeader.SlotCount + 1 + numTimeouts
 
+	log.Info("ValidateBlockProposal", "bp.Proposer", bp.Proposer)
 	expectedSignerIndex, _ := EVSlot(currentSlot)
 	actualSignerIndex := EVIdFromEtherbase(bp.Proposer)
 

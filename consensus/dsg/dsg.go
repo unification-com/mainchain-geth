@@ -35,7 +35,7 @@ type RequestNewBlockProposalMessage struct {
 
 func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
-	log.Info("Propose block #", "num", block.Number().String())
+	log.Info("Propose block #", "num", block.Number().String(), "proposer", proposer)
 
 	proposedBlock := BlockProposal{
 		Number:        block.Number(),
@@ -59,6 +59,7 @@ func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.
 
 func SetSlotNumber(parentHeader types.Header, block *types.Block, numInvalids uint64) *types.Block {
 	// if parent was genesis, use 0 as parentSlotCount
+
 	parentSlotCount := uint64(0)
 	if block.Number().Cmp(big.NewInt(1)) == 1 {
 		parentSlotCount = parentHeader.SlotCount
