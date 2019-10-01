@@ -794,21 +794,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-		// Request a new block proposal
-		newBlockNumber := big.NewInt(1)
-		newBlockNumber = newBlockNumber.Add(newBlockNumber, request.Block.Number())
-
-		rbp := dsg.RequestNewBlockProposalMessage{
-			Number:    newBlockNumber,
-			Verifier:  pm.etherbase,
-			Signature: common.Hash{},
-		}
-		log.Info("New block processed. Request new BP:", "number", rbp.Number)
-		cache := pm.blockchain.GetDSGCache()
-		cache.ResetInvalidCounter()
-
-		pm.BroadcastNewBlockProposalMessage(&rbp)
-
 	case msg.Code == TxMsg:
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
 		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
