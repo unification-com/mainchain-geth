@@ -414,7 +414,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case msg.Code == BlockProposalMsg:
 		// A new block has been proposed
-		log.Info("A new block has been proposed")
+
 		var proposal dsg.BlockProposal
 		if err := msg.Decode(&proposal); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
@@ -422,6 +422,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		cache := pm.blockchain.GetDSGCache()
 		parentHeader := pm.blockchain.CurrentHeader()
 		valid := proposal.ValidateBlockProposal(parentHeader, cache)
+		log.Info("Valid block proposal received")
 
 		go pm.eventMux.Post(core.NewBlockProposalFoundEvent{})
 
@@ -444,14 +445,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			log.Info("new block proposal request for me - I should broadcast my BP")
 			bp, err := cache.GetBlockProposal(requestProposal.Number, pm.etherbase)
 
-			newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
-
-			blockProposal := dsg.ProposeBlock(newBlock, pm.etherbase)
-
 			if err != nil {
 				log.Info("error - could not find my bp in cache", "num", requestProposal.Number, "err", err)
 			} else {
 				log.Info("found my cached bp - sending proposal to peers")
+				newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
+				blockProposal := dsg.ProposeBlock(newBlock, pm.etherbase)
+
 				pm.AsyncBroadcastBlockProposal(&blockProposal)
 			}
 		} else {
