@@ -570,14 +570,13 @@ func (w *worker) taskLoop() {
 			cache.IncrementInvalidCounter()
 
 			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-			w.validationTimeout.Reset(validationTimeoutDuration)
 
-			reqeustBlockNumber := big.NewInt(1)
-			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
+			requestBlockNumber := big.NewInt(1)
+			requestBlockNumber = requestBlockNumber.Add(requestBlockNumber,  w.chain.CurrentHeader().Number)
 
 			rbp := dsg.RequestNewBlockProposalMessage{
-				Number: reqeustBlockNumber,
-				Verifier: w.coinbase,
+				Number:    requestBlockNumber,
+				Verifier:  w.coinbase,
 				Signature: common.Hash{},
 			}
 			log.Info("request new block proposal", "num", rbp.Number)
