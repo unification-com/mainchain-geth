@@ -403,7 +403,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		evid := dsg.EVIdFromEtherbase(pm.etherbase)
 		if result == dsg.Accept && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
 			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
-			blockProposal, err := cache.GetBlockProposalByHash(validationMessage.BlockHash)
+			blockProposal, err := cache.GetBlockProposal(validationMessage.Number, validationMessage.Proposer)
 			if err != nil {
 				log.Error("Block Proposal not found in cache")
 				return nil
