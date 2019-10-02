@@ -6,17 +6,64 @@ import (
 	"testing"
 )
 
-func TestCache(t *testing.T) {
+type tuple struct {
+	Verifier string
+	Authorize bool
+}
+
+func TestCacheAccept(t *testing.T) {
 	hash := common.BigToHash(big.NewInt(1))
 	proposer := common.HexToAddress("1")
 
 	cache := NewCache()
 
-	accept1 := cache.insertValidationMessage(ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress("1"), Proposer: proposer, Authorize: false})
-	accept2 := cache.insertValidationMessage(ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress("2"), Proposer: proposer, Authorize: true})
-	accept3 := cache.insertValidationMessage(ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress("3"), Proposer: proposer, Authorize: true})
+	cases := []tuple{
+		{"1", true},
+		{"2", true},
+		{"3", false},
+	}
 
-	assertEqual(t, accept1, false)
-	assertEqual(t, accept2, false)
-	assertEqual(t, accept3, true)
+	result := Unknown
+	for _, testCase := range cases {
+		msg := ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress(testCase.Verifier), Proposer: proposer, Authorize:testCase.Authorize}
+		result = cache.insertValidationMessage(msg)
+	}
+	assertEqual(t, result, Accept)
+}
+
+func TestCacheReject(t *testing.T) {
+	hash := common.BigToHash(big.NewInt(1))
+	proposer := common.HexToAddress("1")
+
+	cache := NewCache()
+
+	cases := []tuple{
+		{"1", false},
+		{"2", false},
+	}
+
+	result := Unknown
+	for _, testCase := range cases {
+		msg := ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress(testCase.Verifier), Proposer: proposer, Authorize:testCase.Authorize}
+		result = cache.insertValidationMessage(msg)
+	}
+	assertEqual(t, result, Reject)
+}
+
+func TestCacheUnknown(t *testing.T) {
+	hash := common.BigToHash(big.NewInt(1))
+	proposer := common.HexToAddress("1")
+
+	cache := NewCache()
+
+	cases := []tuple{
+		{"1", true},
+	}
+
+	result := Unknown
+	for _, testCase := range cases {
+		msg := ValidationMessage{Number: big.NewInt(1), BlockHash: hash, Verifier: common.HexToAddress(testCase.Verifier), Proposer: proposer, Authorize:testCase.Authorize}
+		result = cache.insertValidationMessage(msg)
+	}
+	assertEqual(t, result, Unknown)
 }
