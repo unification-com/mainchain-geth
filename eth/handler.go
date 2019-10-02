@@ -402,7 +402,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		acceptBlock := cache.InsertValidationMessage(validationMessage)
 
 		evid := dsg.EVIdFromEtherbase(pm.etherbase)
-		if acceptBlock && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
+		if acceptBlock == dsg.Accept && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
 			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
 			blockProposal, err := cache.GetBlockProposalByHash(validationMessage.BlockHash)
 			if err != nil {

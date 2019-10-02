@@ -8,9 +8,15 @@ import (
 	"sync"
 )
 
+type ValidationResult int
+
 const (
 	inmMemoryProposals  = 96   // Number of recent block proposals to keep in memory
 	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
+
+	Accept ValidationResult = 1
+	Reject ValidationResult = -1
+	Unknown ValidationResult = 0
 )
 
 type Cache struct {
@@ -88,11 +94,11 @@ func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) 
 	return blockProposal, errors.New("could not retrieve block proposal from cache")
 }
 
-func (d *Cache) InsertValidationMessage(msg ValidationMessage) bool {
+func (d *Cache) InsertValidationMessage(msg ValidationMessage) ValidationResult {
 	return d.insertValidationMessage(msg)
 }
 
-func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
+func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult {
 	n := msg.Number.Uint64()
 	v := msg.Verifier
 	p := msg.Proposer
@@ -108,8 +114,9 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) bool {
 	return d.acceptBlock(n, p)
 }
 
-func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
+func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) ValidationResult {
 	acks := float64(0)
+	nacks := float64(0)
 
 	var validationMessage ValidationMessage
 	for _, key := range d.validations.Keys() {
@@ -118,14 +125,26 @@ func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) bool {
 				if (validationMessage.Number.Uint64() == blockNum) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
 					acks = acks + 1
 				}
+				if (validationMessage.Number.Uint64() == blockNum) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == false) {
+					nacks = nacks + 1
+				}
 			}
 		}
 	}
 
 	totalSignersFloat := float64(common.NumSignersInRound)
-	requirement := float64(2) / totalSignersFloat
+	ackRequirement := float64(2) / totalSignersFloat
+	nackRequirement := float64(1) / totalSignersFloat
 	acknowledges := acks / totalSignersFloat
-	return acknowledges >= requirement
+	rejections := nacks / totalSignersFloat
+
+	if acknowledges >= ackRequirement {
+		return Accept
+	}
+	if rejections >= nackRequirement {
+		return Reject
+	}
+	return Unknown
 }
 
 // IncrementInvalidCounter is used to increase the timeoutCounter for a block.
