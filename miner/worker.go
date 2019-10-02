@@ -603,22 +603,34 @@ func (w *worker) taskLoop() {
 
 		case validationTimeoutFire := <-w.validationTimeout.C:
 			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
+
 			cache := w.chain.GetDSGCache()
-			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
-			cache.IncrementInvalidCounter()
-			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-			w.validationTimeout.Reset(validationTimeoutDuration)
+			requiredBlockNumber := big.NewInt(1)
+			requiredBlockNumber = requiredBlockNumber.Add(requiredBlockNumber,  w.chain.CurrentHeader().Number)
 
-			reqeustBlockNumber := big.NewInt(1)
-			reqeustBlockNumber = reqeustBlockNumber.Add(reqeustBlockNumber,  w.chain.CurrentHeader().Number)
+			numInvalids := cache.GetInvalidCounter()
+			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
+			expectedSignerIndex, _ := dsg.EVSlot(slot)
+			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
+			status := cache.QueryValidationState(requiredBlockNumber.Uint64(), expectedSigner)
 
-			rbp := dsg.RequestNewBlockProposalMessage{
-				Number: reqeustBlockNumber,
-				Verifier: w.coinbase,
-				Signature: common.Hash{},
+			if status == dsg.Unknown || status == dsg.Reject {
+				cache.IncrementInvalidCounter()
+				w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+				w.validationTimeout.Stop()
+
+				rbp := dsg.RequestNewBlockProposalMessage{
+					Number:    requiredBlockNumber,
+					Verifier:  w.coinbase,
+					Signature: common.Hash{},
+				}
+				log.Info("request new block proposal", "num", rbp.Number)
+				go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 			}
-			log.Info("request new block proposal", "num", rbp.Number)
-			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
+			if status == dsg.Accept {
+				w.timeoutBlockProposal.Stop()
+				w.validationTimeout.Stop()
+			}
 
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
