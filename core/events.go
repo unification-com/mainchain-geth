@@ -37,7 +37,7 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 type NewBlockValidatedEvent struct{ }
 
 // NewBlockProposalFoundEvent: used to manage timeouts
-type NewBlockProposalFoundEvent struct{ }
+type NewBlockProposalFoundEvent struct{ Valid bool }
 
 // NewBlockProposalEvent: used to instruct the ProtocolManager to send a BlockProposal
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }

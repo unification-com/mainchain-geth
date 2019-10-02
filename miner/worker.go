@@ -558,8 +558,10 @@ func (w *worker) taskLoop() {
 		case obj := <-w.newBlockPropoSub.Chan():
 			if obj != nil {
 				if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
-					log.Info("NewBlockProposalFoundEvent", "ev", ev)
-					w.validationTimeout.Reset(validationTimeoutDuration)
+					log.Info("NewBlockProposalFoundEvent", "valid", ev.Valid)
+					if ev.Valid {
+						w.validationTimeout.Reset(validationTimeoutDuration)
+					}
 					w.timeoutBlockProposal.Stop()
 				}
 			}
