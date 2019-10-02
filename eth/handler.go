@@ -782,6 +782,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		request.Block.ReceivedAt = msg.ReceivedAt
 		request.Block.ReceivedFrom = p
 
+		valid := dsg.ValidateNewBlock(request.Block)
+		if valid == false {
+			rbp := dsg.RequestNewBlockProposalMessage{
+				Number:    request.Block.Number(),
+				Verifier:  pm.etherbase,
+				Signature: common.Hash{},
+			}
+			log.Info("request new block proposal because the received NewBlock is invalid", "num", rbp.Number)
+			go pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
+
+			return nil
+		}
+
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
 		pm.fetcher.Enqueue(p.id, request.Block)

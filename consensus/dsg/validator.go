@@ -34,3 +34,9 @@ func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache
 	// TODO: check bp.Number = parent_height + 1
 	return true
 }
+
+
+func ValidateNewBlock(block *types.Block) bool {
+	// TODO: Check signatures once they have been added
+	return true
+}
