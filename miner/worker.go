@@ -554,6 +554,8 @@ func (w *worker) taskLoop() {
 				if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
 					log.Info("NewBlockValidatedEvent", "ev", ev)
 					w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+					cache := w.chain.GetDSGCache()
+					cache.ResetInvalidCounter()
 				}
 			}
 
