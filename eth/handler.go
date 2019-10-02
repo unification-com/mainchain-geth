@@ -398,6 +398,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.Proposer, "validator", validationMessage.Verifier, "authorise", validationMessage.Authorize)
 
 		cache := pm.blockchain.GetDSGCache()
+
+		numInvalids := cache.GetInvalidCounter()
+		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
+		if !dsg.Member(slot, validationMessage.Verifier) {
+			log.Info("discarding validation message from invalid EV", "slot", slot, "ev", validationMessage.Verifier)
+			return nil
+		}
+
 		result := cache.InsertValidationMessage(validationMessage)
 
 		evid := dsg.EVIdFromEtherbase(pm.etherbase)
@@ -435,6 +443,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		cache := pm.blockchain.GetDSGCache()
 
+		numInvalids := cache.GetInvalidCounter()
+		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
+		if !dsg.Member(slot, proposal.Proposer) {
+			log.Info("discarding block proposal message from invalid EV", "slot", slot, "ev", proposal.Proposer)
+			return nil
+		}
+
 		// cache BP
 		cache.InsertBlockProposal(proposal)
 		parentHeader := pm.blockchain.CurrentHeader()
@@ -455,8 +470,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		cache := pm.blockchain.GetDSGCache()
 
-		bpRequired := cache.InsertRequestNewBlockProposalMessage(requestProposal)
 		numInvalids := cache.GetInvalidCounter()
+		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
+		if !dsg.Member(slot, requestProposal.Verifier) {
+			log.Info("discarding request new block proposal message from invalid EV", "slot", slot, "ev", requestProposal.Verifier)
+			return nil
+		}
+
+		bpRequired := cache.InsertRequestNewBlockProposalMessage(requestProposal)
 		parent := pm.blockchain.CurrentHeader()
 		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
 
