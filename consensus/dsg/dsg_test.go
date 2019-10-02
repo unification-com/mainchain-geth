@@ -1,6 +1,7 @@
 package dsg
 
 import (
+	"fmt"
 	"github.com/unification-com/mainchain/common"
 	"testing"
 )
@@ -55,6 +56,34 @@ func TestEVSlots(t *testing.T) {
 		baseOneSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
 		assertEqual(t, baseOneSignerIndex, testCase.SignerIndex)
 		assertEqual(t, epochNumber, testCase.EpochNumber)
+	}
+}
+
+
+func TestEVSetForRound(t *testing.T) {
+	type EVSetTestCase struct {
+		SlotNumber uint64
+		Signers []uint64
+	}
+
+	testCases := []EVSetTestCase{
+		{1, []uint64{1, 2, 3}},
+		{2, []uint64{1, 2, 3}},
+		{3, []uint64{1, 2, 3}},
+		{4, []uint64{1, 2, 3}},
+		{5, []uint64{1, 2, 3}},
+		{6, []uint64{1, 2, 3}},
+		{7, []uint64{4, 5, 6}},
+		{8, []uint64{4, 5, 6}},
+		{9, []uint64{4, 5, 6}},
+		{10, []uint64{4, 5, 6}},
+		{11, []uint64{4, 5, 6}},
+		{12, []uint64{4, 5, 6}},
+		{13, []uint64{7, 8, 9}},
+	}
+	for _, testCase := range testCases {
+		signers := EVSetInternal(testCase.SlotNumber, 24, 4, 12)
+		fmt.Printf("signers: %v\n", signers)
 	}
 }
 

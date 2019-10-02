@@ -86,6 +86,43 @@ func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, n
 	return signerIndex, epochNumber
 }
 
+func contains(a uint64, list []uint64) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func EVSetInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) []uint64 {
+	var slotNumberBase0 = slotNumber - 1
+	var slotIndex = slotNumberBase0 % blocksInEpoch
+
+	var quadrant = slotIndex / (blocksInEpoch / numRounds)
+	var numSignersInQuadrant = numSigners / numRounds
+	var factor = numSigners / numRounds
+
+	var signerIndex = quadrant*factor
+	var ret []uint64
+
+	for i := 0; i < int(numSignersInQuadrant); i++ {
+		inc := signerIndex + uint64(1) + uint64(i)
+		ret = append(ret, inc)
+	}
+	return ret
+}
+
+func EVSet(slotNumber uint64) []uint64 {
+	return EVSetInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+}
+
+func Member(slotNumber uint64, address common.Address) bool {
+	set := EVSet(slotNumber)
+	evID := EVIdFromEtherbase(address)
+	return contains(evID, set)
+}
+
 // The base 0 signer index for a given slot number
 // where the genesis block is slot 0, and the current Epoch
 func EVSlot(slotNumber uint64) (uint64, uint64) {
