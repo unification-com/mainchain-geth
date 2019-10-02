@@ -389,8 +389,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
 	case msg.Code == ValidationMsg:
-		// Validation Message
-		log.Info("Validation Message received")
+		// Validation Message indicates whether the peers agree with the BP or not
 		var validationMessage dsg.ValidationMessage
 		if err := msg.Decode(&validationMessage); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
@@ -399,10 +398,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.Proposer, "validator", validationMessage.Verifier, "authorise", validationMessage.Authorize)
 
 		cache := pm.blockchain.GetDSGCache()
-		acceptBlock := cache.InsertValidationMessage(validationMessage)
+		result := cache.InsertValidationMessage(validationMessage)
 
 		evid := dsg.EVIdFromEtherbase(pm.etherbase)
-		if acceptBlock == dsg.Accept && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
+		if result == dsg.Accept && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
 			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
 			blockProposal, err := cache.GetBlockProposalByHash(validationMessage.BlockHash)
 			if err != nil {
@@ -410,6 +409,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				return nil
 			}
 			go pm.eventMux.Post(core.BlockVerifiedEvent{BlockProposal: &blockProposal})
+		}
+		if result == dsg.Accept {
+			go pm.eventMux.Post(core.ValidationResultEvent{Valid: true})
+		}
+		if result == dsg.Reject {
+			go pm.eventMux.Post(core.ValidationResultEvent{Valid: false})
+			cache.IncrementInvalidCounter()
+			rbp := dsg.RequestNewBlockProposalMessage{
+				Number:    validationMessage.Number,
+				Verifier:  pm.etherbase,
+				Signature: common.Hash{},
+			}
+			log.Info("request new block proposal", "num", rbp.Number)
+			pm.AsyncBroadcastRequestNewBlockProposalMessage(&rbp)
 		}
 
 	case msg.Code == BlockProposalMsg:

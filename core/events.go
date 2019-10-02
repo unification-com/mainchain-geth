@@ -45,8 +45,11 @@ type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 // RequestNewBlockProposalMessageEvent
 type RequestNewBlockProposalMessage struct{ RequestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage }
 
-// BlockVerifiedEvent
+// BlockVerifiedEvent: consensus found on block and trigger NewBlockMessage
 type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
+
+// ValidationResultEvent: used to manage timeouts for TS5 and TS6
+type ValidationResultEvent struct{ Valid bool }
 
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }

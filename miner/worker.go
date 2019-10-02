@@ -144,6 +144,7 @@ type worker struct {
 	verifiedBlockSub *event.TypeMuxSubscription
 	newBlockValidSub *event.TypeMuxSubscription
 	newBlockPropoSub *event.TypeMuxSubscription
+	validationResSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -221,6 +222,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
 	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
 	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
+	worker.validationResSub = mux.Subscribe(core.ValidationResultEvent{})
 
 	worker.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
 	worker.validationTimeout = time.NewTimer(validationTimeoutDuration)
@@ -563,6 +565,21 @@ func (w *worker) taskLoop() {
 						w.validationTimeout.Reset(validationTimeoutDuration)
 					}
 					w.timeoutBlockProposal.Stop()
+				}
+			}
+
+		case obj := <-w.validationResSub.Chan():
+			if obj != nil {
+				if ev, ok := obj.Data.(core.ValidationResultEvent); ok {
+					log.Info("ValidationResultEvent", "ev", ev)
+					if ev.Valid == true {
+						w.timeoutBlockProposal.Stop()
+						w.validationTimeout.Stop()
+					}
+					if ev.Valid == false {
+						w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+						w.validationTimeout.Stop()
+					}
 				}
 			}
 
