@@ -77,8 +77,8 @@ const (
 	staleThreshold = 7
 
 	// DSG Timouts
-	validationTimeoutDuration = 60 * time.Second
-	blockProposalTimeoutDuration = 30 * time.Second
+	validationTimeoutDuration = 5 * time.Second
+	blockProposalTimeoutDuration = 5 * time.Second
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -524,6 +524,7 @@ func (w *worker) taskLoop() {
 	defer w.verifiedBlockSub.Unsubscribe()
 	defer w.newBlockValidSub.Unsubscribe()
 	defer w.newBlockPropoSub.Unsubscribe()
+	w.validationTimeout.Stop()
 
 	var (
 		stopCh chan struct{}
@@ -594,13 +595,17 @@ func (w *worker) taskLoop() {
 
 			requestBlockNumber := big.NewInt(1)
 			requestBlockNumber = requestBlockNumber.Add(requestBlockNumber,  w.chain.CurrentHeader().Number)
+			numInvalids := cache.GetInvalidCounter()
+			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
+			expectedSignerIndex, _ := dsg.EVSlot(slot)
+			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
 
 			rbp := dsg.RequestNewBlockProposalMessage{
 				Number:    requestBlockNumber,
 				Verifier:  w.coinbase,
 				Signature: common.Hash{},
 			}
-			log.Info("request new block proposal", "num", rbp.Number)
+			log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 		case validationTimeoutFire := <-w.validationTimeout.C:
@@ -626,7 +631,7 @@ func (w *worker) taskLoop() {
 					Verifier:  w.coinbase,
 					Signature: common.Hash{},
 				}
-				log.Info("request new block proposal", "num", rbp.Number)
+				log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
 				go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 			}
 			if status == dsg.Accept {

@@ -405,7 +405,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
 			blockProposal, err := cache.GetBlockProposal(validationMessage.Number, validationMessage.Proposer)
 			if err != nil {
-				log.Error("Block Proposal not found in cache")
+				log.Error("Block Proposal not found in cache", "err", err)
 				return nil
 			}
 			go pm.eventMux.Post(core.BlockVerifiedEvent{BlockProposal: &blockProposal})
@@ -421,7 +421,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				Verifier:  pm.etherbase,
 				Signature: common.Hash{},
 			}
-			log.Info("request new block proposal", "num", rbp.Number)
+			log.Info("request new block proposal - reject invalid BP", "num", rbp.Number, "proposer", validationMessage.Proposer)
+
 			pm.AsyncBroadcastRequestNewBlockProposalMessage(&rbp)
 		}
 
@@ -433,18 +434,21 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		cache := pm.blockchain.GetDSGCache()
+
+		// cache BP
+		cache.InsertBlockProposal(proposal)
 		parentHeader := pm.blockchain.CurrentHeader()
 		valid := proposal.ValidateBlockProposal(parentHeader, cache)
-		log.Info("BlockProposal Received", "valid", valid)
+		log.Info("BlockProposal Received", "num", proposal.Number, "proposer", proposal.Proposer, "valid", valid)
 
 		go pm.eventMux.Post(core.NewBlockProposalFoundEvent{valid})
 
 		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+
 		pm.AsyncBroadcastValidationMessage(&vm)
 
 
 	case msg.Code == RequestNewBlockProposalMsg:
-		log.Info("A new block proposal has been requested")
 		var requestProposal dsg.RequestNewBlockProposalMessage
 		if err := msg.Decode(&requestProposal); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
@@ -455,6 +459,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		numInvalids := cache.GetInvalidCounter()
 		parent := pm.blockchain.CurrentHeader()
 		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
+
+		log.Info("A new block proposal has been requested", "num", requestProposal.Number, "from", requestProposal.Verifier)
 
 		if bpRequired && v{
 
