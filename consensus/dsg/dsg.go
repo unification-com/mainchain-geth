@@ -91,3 +91,10 @@ func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, n
 func EVSlot(slotNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
 }
+
+// F is the fault function to calculate the number of required ACKs/NACKs
+func F() (float64, float64) {
+	ackRequirement := float64(2) / float64(3)
+	nackRequirement := float64(1) / float64(3)
+	return ackRequirement, nackRequirement
+}

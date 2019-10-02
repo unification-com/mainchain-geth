@@ -13,6 +13,7 @@ type ValidationResult int
 const (
 	inmMemoryProposals  = 96   // Number of recent block proposals to keep in memory
 	inMemoryValidations = 4096 // Number of recent validation messages to keep in memory
+	inMemoryReqNewBPs   = 4096 // Number of recent request new block proposal messages to keep in memory
 
 	Accept ValidationResult = 1
 	Reject ValidationResult = -1
@@ -22,6 +23,7 @@ const (
 type Cache struct {
 	validations     *lru.ARCCache
 	proposals       *lru.ARCCache
+	reqNewBPs       *lru.ARCCache
 
 	invalidCounter   uint64 // counter for tracking invalid BPs, including BP/VM msg timeouts. Resets with each block commit
 	invalidCounterMu sync.RWMutex
@@ -38,14 +40,21 @@ type ProposalKey struct {
 	Proposer common.Address `json:"proposer"`
 }
 
+type ReqNewBPKey struct {
+	BlockNum  *big.Int       `json:"blocknum"`
+	Validator common.Address `json:"validator"`
+}
+
 func NewCache() *Cache {
 
 	validations, _ := lru.NewARC(inMemoryValidations)
 	proposals, _ := lru.NewARC(inmMemoryProposals)
+	reqNewBPs, _ := lru.NewARC(inMemoryReqNewBPs)
 
 	cache := &Cache{
 		validations:    validations,
 		proposals:      proposals,
+		reqNewBPs:      reqNewBPs,
 		invalidCounter: 0,
 	}
 	return cache
@@ -132,11 +141,7 @@ func (d *Cache) QueryValidationState(blockNum uint64, proposer common.Address) V
 		}
 	}
 
-	totalSignersFloat := float64(common.NumSignersInRound)
-	ackRequirement := float64(2) / totalSignersFloat
-	nackRequirement := float64(1) / totalSignersFloat
-	acknowledges := acks / totalSignersFloat
-	rejections := nacks / totalSignersFloat
+	ackRequirement, nackRequirement, acknowledges, rejections := d.calculateAcksNacks(common.NumSignersInRound, acks, nacks)
 
 	if acknowledges >= ackRequirement {
 		return Accept
@@ -145,6 +150,30 @@ func (d *Cache) QueryValidationState(blockNum uint64, proposer common.Address) V
 		return Reject
 	}
 	return Unknown
+}
+
+// CalculateAcksNacks is the exported function for calculateAcksNacks
+func (d *Cache) CalculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
+	return d.calculateAcksNacks(numSigners, acks, acks)
+}
+
+// calculateAcksNacks calculates and returns the ACK/NACK requirements and
+// the actual ACK/NACK values
+func (d *Cache) calculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
+
+	acknowledges, rejections := float64(0), float64(0)
+	totalSignersFloat := float64(numSigners)
+
+	ackRequirement, nackRequirement := F()
+
+	if acks > 0 {
+		acknowledges = acks / totalSignersFloat
+	}
+	if nacks > 0 {
+		rejections = nacks / totalSignersFloat
+	}
+
+	return ackRequirement, nackRequirement, acknowledges, rejections
 }
 
 // IncrementInvalidCounter is used to increase the timeoutCounter for a block.
