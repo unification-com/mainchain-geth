@@ -52,8 +52,7 @@ func TestEVSlots(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		baseZeroSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
-		baseOneSignerIndex := baseZeroSignerIndex + 1
+		baseOneSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
 		assertEqual(t, baseOneSignerIndex, testCase.SignerIndex)
 		assertEqual(t, epochNumber, testCase.EpochNumber)
 	}
@@ -68,7 +67,9 @@ func TestGetValidationPool(t *testing.T) {
 }
 
 func TestEVIdFromEtherbase(t *testing.T) {
-	etherbase := common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93")
-	evID := EVIdFromEtherbase(etherbase)
-	assertEqual(t, evID, uint64(3))
+	assertEqual(t, EVIdFromEtherbase(common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7")), uint64(1))
+	assertEqual(t, EtherbaseFromEVId(1), common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"))
+
+	assertEqual(t, EVIdFromEtherbase(common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93")), uint64(4))
+	assertEqual(t, EtherbaseFromEVId(4), common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93"))
 }

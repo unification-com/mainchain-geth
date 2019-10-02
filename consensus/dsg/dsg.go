@@ -83,7 +83,7 @@ func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, n
 	var position = slotIndex % numSignersInQuadrant
 	var signerIndex = quadrant*factor + (position + 1)
 
-	return signerIndex - 1, epochNumber
+	return signerIndex, epochNumber
 }
 
 // The base 0 signer index for a given slot number

@@ -53,14 +53,21 @@ func getValidatorPool() []common.Address {
 	return validatorPool
 }
 
+// Returns a base 1 EV Id, or 0 if not found
 func EVIdFromEtherbase(etherbase common.Address) uint64 {
 	stakedWallets := getStakedWallets()
 
 	for index, stakedWallet := range stakedWallets {
 		if stakedWallet.Address == etherbase {
-			return uint64(index)
+			return uint64(index) + 1
 		}
 	}
 
 	return uint64(0)
+}
+
+// evid is a base 1 index
+func EtherbaseFromEVId(evid uint64) common.Address {
+	stakedWallets := getStakedWallets()
+	return stakedWallets[evid - 1].Address
 }

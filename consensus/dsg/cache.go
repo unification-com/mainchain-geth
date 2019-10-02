@@ -111,10 +111,10 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult 
 
 	d.validations.Add(key, msg)
 
-	return d.acceptBlock(n, p)
+	return d.QueryValidationState(n, p)
 }
 
-func (d *Cache) acceptBlock(blockNum uint64, proposer common.Address) ValidationResult {
+func (d *Cache) QueryValidationState(blockNum uint64, proposer common.Address) ValidationResult {
 	acks := float64(0)
 	nacks := float64(0)
 
