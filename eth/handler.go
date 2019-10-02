@@ -450,11 +450,14 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		cache := pm.blockchain.GetDSGCache()
-		numInvalids := cache.GetInvalidCounter()
 
+		bpRequired := cache.InsertRequestNewBlockProposalMessage(requestProposal)
+		numInvalids := cache.GetInvalidCounter()
 		parent := pm.blockchain.CurrentHeader()
 		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
-		if v {
+
+		if bpRequired && v{
+
 			log.Info("new block proposal request for me - I should broadcast my BP")
 			bp, err := cache.GetBlockProposal(requestProposal.Number, pm.etherbase)
 
@@ -467,8 +470,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 				pm.AsyncBroadcastBlockProposal(&blockProposal)
 			}
-		} else {
-			log.Trace("request is not for me. Ignore request")
 		}
 
 	// Block header query, collect the requested headers and reply

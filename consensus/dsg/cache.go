@@ -202,3 +202,44 @@ func (d *Cache) GetInvalidCounter() uint64 {
 
 	return d.invalidCounter
 }
+
+// InsertRequestNewBlockProposalMessage inserts a Request New Block Proposal message
+// into the cache, and executes QueryRequestNewBpMessageState to see if
+// 2/3 EVs agree a new BP is required
+func (d *Cache) InsertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) bool {
+	d.insertRequestNewBlockProposalMessage(msg)
+	return d.QueryRequestNewBpMessageState(msg.Number)
+}
+
+// QueryRequestNewBpMessageState queries the reqNewBPs cache for the given
+// block. Returns true when 2/3 EVs have sent a new request
+func (d *Cache) QueryRequestNewBpMessageState(blockNum *big.Int) bool {
+	numRequests := float64(0)
+
+	var reqNewBPMessage RequestNewBlockProposalMessage
+	for _, key := range d.reqNewBPs.Keys() {
+		if reqm, ok := d.reqNewBPs.Get(key); ok {
+			if reqNewBPMessage, ok = reqm.(RequestNewBlockProposalMessage); ok {
+				if reqNewBPMessage.Number.Cmp(blockNum) == 0{
+					numRequests = numRequests + 1
+				}
+			}
+		}
+	}
+
+	requirement, _, requests, _ := d.calculateAcksNacks(common.NumSignersInRound, numRequests, float64(0))
+
+	if requests >= requirement {
+		return true
+	}
+
+	return false
+}
+
+func (d *Cache) insertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) {
+	key := ReqNewBPKey{
+		BlockNum:  msg.Number,
+		Validator: msg.Verifier,
+	}
+	d.reqNewBPs.Add(key, msg)
+}
