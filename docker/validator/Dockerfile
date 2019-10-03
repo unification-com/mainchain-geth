@@ -48,5 +48,5 @@ RUN /root/.go/bin/und --datadir "/root/.und_mainchain" account import --password
 
 WORKDIR "/root/.und_mainchain"
 
-RUN echo "/root/.go/bin/und attach /root/.und_mainchain/und.ipc" >> /root/.bash_history && \
+RUN echo "/root/.go/bin/und attach /root/.und_mainchain/unddevnet/und.ipc" >> /root/.bash_history && \
     echo "alias ll='ls -la'" >> /root/.bashrc
