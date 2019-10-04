@@ -50,9 +50,13 @@ func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
 func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.Address) bool {
 	slot := parentHeader.SlotCount + 1 + numInvalids
+	thisBlockNum := big.NewInt(1)
+	thisBlockNum = thisBlockNum.Add(thisBlockNum, parentHeader.Number)
 
 	expectedSignerIndex, _ := EVSlot(slot)
 	actualSignerIndex := EVIdFromEtherbase(etherbase)
+
+	log.Info("dsg authorise", "block", thisBlockNum, "parent", parentHeader.Number, "numInvalids", numInvalids, "p_slot", parentHeader.SlotCount, "slot", slot, "etherbase", etherbase, "exp", expectedSignerIndex, "act", actualSignerIndex)
 
 	return expectedSignerIndex == actualSignerIndex
 }

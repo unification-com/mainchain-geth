@@ -4,6 +4,7 @@ import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
+	"github.com/unification-com/mainchain/log"
 	"math/big"
 	"sync"
 )
@@ -30,14 +31,14 @@ type Cache struct {
 }
 
 type ValidationKey struct {
-	BlockNum  uint64         `json:"blocknum"`
-	Proposer  common.Address `json:"proposer"`
-	Validator common.Address `json:"validator"`
+	BlockNum  *big.Int         `json:"blocknum"`
+	Proposer  common.Address   `json:"proposer"`
+	Validator common.Address   `json:"validator"`
 }
 
 type ProposalKey struct {
-	BlockNum uint64         `json:"blocknum"`
-	Proposer common.Address `json:"proposer"`
+	BlockNum common.Hash     `json:"blocknum"`
+	Proposer common.Address  `json:"proposer"`
 }
 
 type ReqNewBPKey struct {
@@ -61,20 +62,20 @@ func NewCache() *Cache {
 }
 
 func (d *Cache) InsertBlockProposal(bp BlockProposal) {
-	n := bp.Number.Uint64()
-	p := bp.Proposer
-
 	key := ProposalKey{
-		BlockNum: n,
-		Proposer: p,
+		BlockNum: common.BytesToHash(bp.Number.Bytes()),
+		Proposer: bp.Proposer,
 	}
 
-	d.proposals.Add(key, bp)
+	if ok := d.proposals.Contains(key); !ok {
+		log.Info("cache new block proposal", "num", bp.Number, "proposer", bp.Proposer)
+		d.proposals.Add(key, bp)
+	}
 }
 
 func (d *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
 	key := ProposalKey{
-		BlockNum: blockNum.Uint64(),
+		BlockNum: common.BytesToHash(blockNum.Bytes()),
 		Proposer: proposer,
 	}
 
@@ -108,7 +109,7 @@ func (d *Cache) InsertValidationMessage(msg ValidationMessage) ValidationResult 
 }
 
 func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult {
-	n := msg.Number.Uint64()
+	n := msg.Number
 	v := msg.Verifier
 	p := msg.Proposer
 
@@ -118,12 +119,18 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult 
 		Proposer:  p,
 	}
 
+	if ok := d.validations.Contains(key); ok {
+		log.Info("delete stale validation message from cache", "num", msg.Number, "proposer", msg.Proposer, "validator", msg.Verifier)
+		d.validations.Remove(key)
+	}
+
+	log.Info("cache new validation message", "num", msg.Number, "proposer", msg.Proposer, "validator", msg.Verifier)
 	d.validations.Add(key, msg)
 
 	return d.QueryValidationState(n, p)
 }
 
-func (d *Cache) QueryValidationState(blockNum uint64, proposer common.Address) ValidationResult {
+func (d *Cache) QueryValidationState(blockNum *big.Int, proposer common.Address) ValidationResult {
 	acks := float64(0)
 	nacks := float64(0)
 
@@ -131,10 +138,10 @@ func (d *Cache) QueryValidationState(blockNum uint64, proposer common.Address) V
 	for _, key := range d.validations.Keys() {
 		if vm, ok := d.validations.Get(key); ok {
 			if validationMessage, ok = vm.(ValidationMessage); ok {
-				if (validationMessage.Number.Uint64() == blockNum) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
+				if (validationMessage.Number.Cmp(blockNum) == 0) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
 					acks = acks + 1
 				}
-				if (validationMessage.Number.Uint64() == blockNum) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == false) {
+				if (validationMessage.Number.Cmp(blockNum) == 0) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == false) {
 					nacks = nacks + 1
 				}
 			}
@@ -241,5 +248,10 @@ func (d *Cache) insertRequestNewBlockProposalMessage(msg RequestNewBlockProposal
 		BlockNum:  msg.Number,
 		Validator: msg.Verifier,
 	}
+	if ok := d.reqNewBPs.Contains(key); ok {
+		log.Info("delete stale request new block proposal message from cache", "num", msg.Number, "validator", msg.Verifier)
+		d.reqNewBPs.Remove(key)
+	}
+	log.Info("cache new request new block proposal message", "num", msg.Number, "validator", msg.Verifier)
 	d.reqNewBPs.Add(key, msg)
 }
