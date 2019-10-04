@@ -80,12 +80,13 @@ type ProtocolManager struct {
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
 
-	eventMux      *event.TypeMux
-	txsCh         chan core.NewTxsEvent
-	txsSub        event.Subscription
-	minedBlockSub *event.TypeMuxSubscription
-	proposalBlockSub *event.TypeMuxSubscription
-	requestNewBlockProposalSub *event.TypeMuxSubscription
+	eventMux                    *event.TypeMux
+	txsCh                       chan core.NewTxsEvent
+	txsSub                      event.Subscription
+	minedBlockSub               *event.TypeMuxSubscription
+	proposalBlockSub            *event.TypeMuxSubscription
+	requestNewBlockProposalSub  *event.TypeMuxSubscription
+	sendNewValidationMessageSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
 	etherbase common.Address
@@ -258,9 +259,11 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
 	pm.requestNewBlockProposalSub = pm.eventMux.Subscribe(core.RequestNewBlockProposalMessage{})
+	pm.sendNewValidationMessageSub = pm.eventMux.Subscribe(core.SendNewValidationMessageEvent{})
 	go pm.minedBroadcastLoop()
 	go pm.proposedBroadcastLoop()
 	go pm.requestNewBlockProposalLoop()
+	go pm.sendNewValidationMessageLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -430,8 +433,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				Signature: common.Hash{},
 			}
 			log.Info("request new block proposal - reject invalid BP", "num", rbp.Number, "proposer", validationMessage.Proposer)
-
-			pm.AsyncBroadcastRequestNewBlockProposalMessage(&rbp)
+			go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &rbp})
+			go pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 		}
 
 	case msg.Code == BlockProposalMsg:
@@ -460,7 +463,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
 
-		pm.AsyncBroadcastValidationMessage(&vm)
+		// cache own validation message
+		cache.InsertValidationMessage(vm)
+		go pm.eventMux.Post(core.SendNewValidationMessageEvent{ValidationMessage: &vm})
 
 
 	case msg.Code == RequestNewBlockProposalMsg:
@@ -476,28 +481,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			log.Info("discarding request new block proposal message from invalid EV", "slot", slot, "ev", requestProposal.Verifier)
 			return nil
 		}
-
-		bpRequired := cache.InsertRequestNewBlockProposalMessage(requestProposal)
-		parent := pm.blockchain.CurrentHeader()
-		v := dsg.Authorized(*parent, numInvalids, pm.etherbase)
-
 		log.Info("A new block proposal has been requested", "num", requestProposal.Number, "from", requestProposal.Verifier)
 
-		if bpRequired && v{
-
-			log.Info("new block proposal request for me - I should broadcast my BP")
-			bp, err := cache.GetBlockProposal(requestProposal.Number, pm.etherbase)
-
-			if err != nil {
-				log.Info(" error - could not find my bp in cache", "num", requestProposal.Number, "err", err, "etherbase", pm.etherbase)
-			} else {
-				log.Info("found my cached bp - sending proposal to peers")
-				newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
-				blockProposal := dsg.ProposeBlock(newBlock, pm.etherbase)
-
-				pm.AsyncBroadcastBlockProposal(&blockProposal)
-			}
-		}
+		go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &requestProposal})
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
@@ -818,6 +804,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				Signature: common.Hash{},
 			}
 			log.Info("request new block proposal because the received NewBlock is invalid", "num", rbp.Number)
+			// cache own ReqNewBP
+			go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &rbp})
 			go pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 			return nil
@@ -1023,6 +1011,14 @@ func (pm *ProtocolManager) requestNewBlockProposalLoop() {
 	for obj := range pm.requestNewBlockProposalSub.Chan() {
 		if ev, ok := obj.Data.(core.RequestNewBlockProposalMessage); ok {
 			pm.AsyncBroadcastRequestNewBlockProposalMessage(ev.RequestNewBlockProposalMessage)
+		}
+	}
+}
+
+func (pm *ProtocolManager) sendNewValidationMessageLoop() {
+	for obj := range pm.sendNewValidationMessageSub.Chan() {
+		if ev, ok := obj.Data.(core.SendNewValidationMessageEvent); ok {
+			pm.AsyncBroadcastValidationMessage(ev.ValidationMessage)
 		}
 	}
 }

@@ -51,6 +51,12 @@ type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
 // ValidationResultEvent: used to manage timeouts for TS5 and TS6
 type ValidationResultEvent struct{ Valid bool }
 
+// RequestNewBlockProposalEvent - used to check for and trigger a new BP
+type RequestNewBlockProposalEvent struct { RequestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage }
+
+//SendNewValidationMessageEvent - used to broadcast Validation Messages to peers
+type SendNewValidationMessageEvent struct { ValidationMessage *dsg.ValidationMessage }
+
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 

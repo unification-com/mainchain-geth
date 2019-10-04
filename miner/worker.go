@@ -145,6 +145,7 @@ type worker struct {
 	newBlockValidSub *event.TypeMuxSubscription
 	newBlockPropoSub *event.TypeMuxSubscription
 	validationResSub *event.TypeMuxSubscription
+	requestNewBlockProposalSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -223,6 +224,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
 	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
 	worker.validationResSub = mux.Subscribe(core.ValidationResultEvent{})
+	worker.requestNewBlockProposalSub = mux.Subscribe(core.RequestNewBlockProposalEvent{})
 
 	worker.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
 	worker.validationTimeout = time.NewTimer(validationTimeoutDuration)
@@ -586,6 +588,41 @@ func (w *worker) taskLoop() {
 				}
 			}
 
+		case obj := <-w.requestNewBlockProposalSub.Chan():
+			if obj != nil {
+				if ev, ok := obj.Data.(core.RequestNewBlockProposalEvent); ok {
+					cache := w.chain.GetDSGCache()
+					numInvalids := cache.GetInvalidCounter()
+					bpRequired := cache.InsertRequestNewBlockProposalMessage(*ev.RequestNewBlockProposalMessage)
+					parent := w.chain.CurrentHeader()
+					v := dsg.Authorized(*parent, numInvalids, w.coinbase)
+
+					log.Info("requestNewBlockProposalSub.Chan", "bpRequired", bpRequired, "v", v)
+
+					if bpRequired && v{
+
+						log.Info("new block proposal request for me - I should broadcast my BP")
+						bp, err := cache.GetBlockProposal(ev.RequestNewBlockProposalMessage.Number, w.coinbase)
+
+						if err != nil {
+							log.Info(" error - could not find my bp in cache", "num", ev.RequestNewBlockProposalMessage.Number, "err", err, "etherbase", w.coinbase)
+						} else {
+							log.Info("found my cached bp - sending proposal to peers")
+							newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
+							blockProposal := dsg.ProposeBlock(newBlock, w.coinbase)
+
+							//validate, cache and broadcast own validation message
+							valid := blockProposal.ValidateBlockProposal(parent, cache)
+							vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+							cache.InsertValidationMessage(vm)
+							go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
+							go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+							go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
+						}
+					}
+				}
+			}
+
 		case timeoutBlockProposalFire := <-w.timeoutBlockProposal.C:
 			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
 			cache := w.chain.GetDSGCache()
@@ -606,6 +643,9 @@ func (w *worker) taskLoop() {
 				Signature: common.Hash{},
 			}
 			log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
+
+			// post RequestNewBlockProposalEvent and broadcast RequestNewBlockProposalMessage
+			go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
 		case validationTimeoutFire := <-w.validationTimeout.C:
@@ -619,7 +659,7 @@ func (w *worker) taskLoop() {
 			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
 			expectedSignerIndex, _ := dsg.EVSlot(slot)
 			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
-			status := cache.QueryValidationState(requiredBlockNumber.Uint64(), expectedSigner)
+			status := cache.QueryValidationState(requiredBlockNumber, expectedSigner)
 
 			if status == dsg.Unknown || status == dsg.Reject {
 				cache.IncrementInvalidCounter()
@@ -632,6 +672,8 @@ func (w *worker) taskLoop() {
 					Signature: common.Hash{},
 				}
 				log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
+
+				go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
 				go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 			}
 			if status == dsg.Accept {
@@ -676,7 +718,15 @@ func (w *worker) taskLoop() {
 			}
 			log.Info("⭐ The author may produce this block")
 
+			//validate, cache and broadcast own validation message
+			valid := blockProposal.ValidateBlockProposal(parent, cache)
+			vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+			cache.InsertValidationMessage(vm)
+			go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
+
 			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+
+			go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
 
 		case <-w.exitCh:
 			interrupt()
