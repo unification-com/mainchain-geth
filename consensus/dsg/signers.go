@@ -15,9 +15,9 @@ func getStakedWallets() []StakedWallet {
 	// ToDo - get from stateDb, or create snapshot
 
 	stakedWallets := []StakedWallet{
-		{common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"), big.NewInt(10)},
-		{common.HexToAddress("0x002A956804bAD8DCad148aBFF71515F9B057F7E0"), big.NewInt(1000)},
-		{common.HexToAddress("0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15"), big.NewInt(100)},
+		{common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"), big.NewInt(1000)},
+		{common.HexToAddress("0x002A956804bAD8DCad148aBFF71515F9B057F7E0"), big.NewInt(100)},
+		{common.HexToAddress("0x003ADc30A6f4DB59d2698e3D3029fd1BA68b6B15"), big.NewInt(10)},
 		{common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93"), big.NewInt(1)},
 	}
 	return stakedWallets
@@ -53,14 +53,21 @@ func getValidatorPool() []common.Address {
 	return validatorPool
 }
 
+// Returns a base 1 EV Id, or 0 if not found
 func EVIdFromEtherbase(etherbase common.Address) uint64 {
 	stakedWallets := getStakedWallets()
 
 	for index, stakedWallet := range stakedWallets {
 		if stakedWallet.Address == etherbase {
-			return uint64(index)
+			return uint64(index) + 1
 		}
 	}
 
 	return uint64(0)
+}
+
+// evid is a base 1 index
+func EtherbaseFromEVId(evid uint64) common.Address {
+	stakedWallets := getStakedWallets()
+	return stakedWallets[evid - 1].Address
 }

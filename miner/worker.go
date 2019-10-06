@@ -75,6 +75,10 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	// DSG Timouts
+	validationTimeoutDuration = 15 * time.Second
+	blockProposalTimeoutDuration = 15 * time.Second
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -140,6 +144,8 @@ type worker struct {
 	verifiedBlockSub *event.TypeMuxSubscription
 	newBlockValidSub *event.TypeMuxSubscription
 	newBlockPropoSub *event.TypeMuxSubscription
+	validationResSub *event.TypeMuxSubscription
+	requestNewBlockProposalSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -167,8 +173,8 @@ type worker struct {
 	snapshotState *state.StateDB
 
 	// Timers
-	timeoutBlockProposal time.Timer
-	validationTimeout time.Timer
+	timeoutBlockProposal *time.Timer
+	validationTimeout *time.Timer
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -217,6 +223,11 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
 	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
 	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
+	worker.validationResSub = mux.Subscribe(core.ValidationResultEvent{})
+	worker.requestNewBlockProposalSub = mux.Subscribe(core.RequestNewBlockProposalEvent{})
+
+	worker.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
+	worker.validationTimeout = time.NewTimer(validationTimeoutDuration)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -515,6 +526,7 @@ func (w *worker) taskLoop() {
 	defer w.verifiedBlockSub.Unsubscribe()
 	defer w.newBlockValidSub.Unsubscribe()
 	defer w.newBlockPropoSub.Unsubscribe()
+	w.validationTimeout.Stop()
 
 	var (
 		stopCh chan struct{}
@@ -528,11 +540,6 @@ func (w *worker) taskLoop() {
 			stopCh = nil
 		}
 	}
-	validationTimeoutDuration := 60 * time.Second
-	blockProposalTimeoutDuration := 60 * time.Second
-
-	timeoutBlockProposal := time.NewTimer(blockProposalTimeoutDuration)
-	validationTimeout := time.NewTimer(validationTimeoutDuration)
 
 	for {
 		select {
@@ -549,42 +556,130 @@ func (w *worker) taskLoop() {
 			if obj != nil {
 				if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
 					log.Info("NewBlockValidatedEvent", "ev", ev)
-					timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+					w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+					cache := w.chain.GetDSGCache()
+					cache.ResetInvalidCounter()
 				}
 			}
 
 		case obj := <-w.newBlockPropoSub.Chan():
 			if obj != nil {
 				if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
-					log.Info("NewBlockProposalFoundEvent", "ev", ev)
-					validationTimeout.Reset(validationTimeoutDuration)
-					timeoutBlockProposal.Stop()
+					log.Info("NewBlockProposalFoundEvent", "valid", ev.Valid)
+					if ev.Valid {
+						w.validationTimeout.Reset(validationTimeoutDuration)
+					}
+					w.timeoutBlockProposal.Stop()
 				}
 			}
 
-		case timeoutBlockProposalFire := <-timeoutBlockProposal.C:
+		case obj := <-w.validationResSub.Chan():
+			if obj != nil {
+				if ev, ok := obj.Data.(core.ValidationResultEvent); ok {
+					log.Info("ValidationResultEvent", "ev", ev)
+					if ev.Valid == true {
+						w.timeoutBlockProposal.Stop()
+						w.validationTimeout.Stop()
+					}
+					if ev.Valid == false {
+						w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+						w.validationTimeout.Stop()
+					}
+				}
+			}
+
+		case obj := <-w.requestNewBlockProposalSub.Chan():
+			if obj != nil {
+				if ev, ok := obj.Data.(core.RequestNewBlockProposalEvent); ok {
+					cache := w.chain.GetDSGCache()
+					numInvalids := cache.GetInvalidCounter()
+					bpRequired := cache.InsertRequestNewBlockProposalMessage(*ev.RequestNewBlockProposalMessage)
+					parent := w.chain.CurrentHeader()
+					v := dsg.Authorized(*parent, numInvalids, w.coinbase)
+
+					log.Info("requestNewBlockProposalSub.Chan", "bpRequired", bpRequired, "v", v)
+
+					if bpRequired && v{
+
+						log.Info("new block proposal request for me - I should broadcast my BP")
+						bp, err := cache.GetBlockProposal(ev.RequestNewBlockProposalMessage.Number, w.coinbase)
+
+						if err != nil {
+							log.Info(" error - could not find my bp in cache", "num", ev.RequestNewBlockProposalMessage.Number, "err", err, "etherbase", w.coinbase)
+						} else {
+							log.Info("found my cached bp - sending proposal to peers")
+							newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
+							blockProposal := dsg.ProposeBlock(newBlock, w.coinbase)
+
+							//validate, cache and broadcast own validation message
+							valid := blockProposal.ValidateBlockProposal(parent, cache)
+							vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+							cache.InsertValidationMessage(vm)
+							go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
+							go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+							go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
+						}
+					}
+				}
+			}
+
+		case timeoutBlockProposalFire := <-w.timeoutBlockProposal.C:
 			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
 			cache := w.chain.GetDSGCache()
 			cache.IncrementInvalidCounter()
 
+			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+
+			requestBlockNumber := big.NewInt(1)
+			requestBlockNumber = requestBlockNumber.Add(requestBlockNumber,  w.chain.CurrentHeader().Number)
+			numInvalids := cache.GetInvalidCounter()
+			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
+			expectedSignerIndex, _ := dsg.EVSlot(slot)
+			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
+
 			rbp := dsg.RequestNewBlockProposalMessage{
-				//TODO: Populate
+				Number:    requestBlockNumber,
+				Verifier:  w.coinbase,
 				Signature: common.Hash{},
 			}
+			log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
+
+			// post RequestNewBlockProposalEvent and broadcast RequestNewBlockProposalMessage
+			go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
 			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 
-		case validationTimeoutFire := <-validationTimeout.C:
+		case validationTimeoutFire := <-w.validationTimeout.C:
 			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
-			cache := w.chain.GetDSGCache()
-			//TODO: Check cache: only if not found 1/3 NACK Validation Messages nor 2/3 ACK Validation Messages
-			cache.IncrementInvalidCounter()
-			timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
 
-			rbp := dsg.RequestNewBlockProposalMessage{
-				//TODO: Populate
-				Signature: common.Hash{},
+			cache := w.chain.GetDSGCache()
+			requiredBlockNumber := big.NewInt(1)
+			requiredBlockNumber = requiredBlockNumber.Add(requiredBlockNumber,  w.chain.CurrentHeader().Number)
+
+			numInvalids := cache.GetInvalidCounter()
+			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
+			expectedSignerIndex, _ := dsg.EVSlot(slot)
+			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
+			status := cache.QueryValidationState(requiredBlockNumber, expectedSigner)
+
+			if status == dsg.Unknown || status == dsg.Reject {
+				cache.IncrementInvalidCounter()
+				w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+				w.validationTimeout.Stop()
+
+				rbp := dsg.RequestNewBlockProposalMessage{
+					Number:    requiredBlockNumber,
+					Verifier:  w.coinbase,
+					Signature: common.Hash{},
+				}
+				log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
+
+				go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
+				go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
 			}
-			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
+			if status == dsg.Accept {
+				w.timeoutBlockProposal.Stop()
+				w.validationTimeout.Stop()
+			}
 
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
@@ -612,18 +707,26 @@ func (w *worker) taskLoop() {
 			parent := w.chain.CurrentHeader()
 			v := dsg.Authorized(*parent, numInvalids, w.coinbase)
 
+			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
+
+			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
+			cache.InsertBlockProposal(blockProposal)
+
 			if !v {
 				log.Info("The author may not produce this block")
 				continue
 			}
 			log.Info("⭐ The author may produce this block")
 
-			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
-
-			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
-			cache.InsertBlockProposal(blockProposal)
+			//validate, cache and broadcast own validation message
+			valid := blockProposal.ValidateBlockProposal(parent, cache)
+			vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+			cache.InsertValidationMessage(vm)
+			go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
 
 			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
+
+			go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
 
 		case <-w.exitCh:
 			interrupt()

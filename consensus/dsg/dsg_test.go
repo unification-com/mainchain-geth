@@ -1,6 +1,7 @@
 package dsg
 
 import (
+	"fmt"
 	"github.com/unification-com/mainchain/common"
 	"testing"
 )
@@ -52,10 +53,37 @@ func TestEVSlots(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		baseZeroSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
-		baseOneSignerIndex := baseZeroSignerIndex + 1
+		baseOneSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
 		assertEqual(t, baseOneSignerIndex, testCase.SignerIndex)
 		assertEqual(t, epochNumber, testCase.EpochNumber)
+	}
+}
+
+
+func TestEVSetForRound(t *testing.T) {
+	type EVSetTestCase struct {
+		SlotNumber uint64
+		Signers []uint64
+	}
+
+	testCases := []EVSetTestCase{
+		{1, []uint64{1, 2, 3}},
+		{2, []uint64{1, 2, 3}},
+		{3, []uint64{1, 2, 3}},
+		{4, []uint64{1, 2, 3}},
+		{5, []uint64{1, 2, 3}},
+		{6, []uint64{1, 2, 3}},
+		{7, []uint64{4, 5, 6}},
+		{8, []uint64{4, 5, 6}},
+		{9, []uint64{4, 5, 6}},
+		{10, []uint64{4, 5, 6}},
+		{11, []uint64{4, 5, 6}},
+		{12, []uint64{4, 5, 6}},
+		{13, []uint64{7, 8, 9}},
+	}
+	for _, testCase := range testCases {
+		signers := EVSetInternal(testCase.SlotNumber, 24, 4, 12)
+		fmt.Printf("signers: %v\n", signers)
 	}
 }
 
@@ -68,7 +96,9 @@ func TestGetValidationPool(t *testing.T) {
 }
 
 func TestEVIdFromEtherbase(t *testing.T) {
-	etherbase := common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93")
-	evID := EVIdFromEtherbase(etherbase)
-	assertEqual(t, evID, uint64(3))
+	assertEqual(t, EVIdFromEtherbase(common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7")), uint64(1))
+	assertEqual(t, EtherbaseFromEVId(1), common.HexToAddress("0x001A320943d4535e93d31E4A65a6e21C5dF375D7"))
+
+	assertEqual(t, EVIdFromEtherbase(common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93")), uint64(4))
+	assertEqual(t, EtherbaseFromEVId(4), common.HexToAddress("0x004A435F1D54aA5cc9FCfA0fEB6B8c4a428bbB93"))
 }

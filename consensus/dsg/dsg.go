@@ -30,14 +30,12 @@ type ValidationMessage struct {
 type RequestNewBlockProposalMessage struct {
 	Number    *big.Int       `json:"number"     gencodec:"required"`
 	Verifier  common.Address `json:"verifierId" gencodec:"required"`
-	Proposer  common.Address `json:"proposerId" gencodec:"required"`
-	Slot      uint64         `json:"slot"       gencodec:"required"`
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 
 func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
-	log.Info("Propose block #", "num", block.Number().String())
+	log.Info("Propose block #", "num", block.Number().String(), "proposer", proposer)
 
 	proposedBlock := BlockProposal{
 		Number:        block.Number(),
@@ -52,15 +50,20 @@ func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
 func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.Address) bool {
 	slot := parentHeader.SlotCount + 1 + numInvalids
+	thisBlockNum := big.NewInt(1)
+	thisBlockNum = thisBlockNum.Add(thisBlockNum, parentHeader.Number)
 
 	expectedSignerIndex, _ := EVSlot(slot)
 	actualSignerIndex := EVIdFromEtherbase(etherbase)
+
+	log.Info("dsg authorise", "block", thisBlockNum, "parent", parentHeader.Number, "numInvalids", numInvalids, "p_slot", parentHeader.SlotCount, "slot", slot, "etherbase", etherbase, "exp", expectedSignerIndex, "act", actualSignerIndex)
 
 	return expectedSignerIndex == actualSignerIndex
 }
 
 func SetSlotNumber(parentHeader types.Header, block *types.Block, numInvalids uint64) *types.Block {
 	// if parent was genesis, use 0 as parentSlotCount
+
 	parentSlotCount := uint64(0)
 	if block.Number().Cmp(big.NewInt(1)) == 1 {
 		parentSlotCount = parentHeader.SlotCount
@@ -84,11 +87,55 @@ func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, n
 	var position = slotIndex % numSignersInQuadrant
 	var signerIndex = quadrant*factor + (position + 1)
 
-	return signerIndex - 1, epochNumber
+	return signerIndex, epochNumber
+}
+
+func contains(a uint64, list []uint64) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func EVSetInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) []uint64 {
+	var slotNumberBase0 = slotNumber - 1
+	var slotIndex = slotNumberBase0 % blocksInEpoch
+
+	var quadrant = slotIndex / (blocksInEpoch / numRounds)
+	var numSignersInQuadrant = numSigners / numRounds
+	var factor = numSigners / numRounds
+
+	var signerIndex = quadrant*factor
+	var ret []uint64
+
+	for i := 0; i < int(numSignersInQuadrant); i++ {
+		inc := signerIndex + uint64(1) + uint64(i)
+		ret = append(ret, inc)
+	}
+	return ret
+}
+
+func EVSet(slotNumber uint64) []uint64 {
+	return EVSetInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+}
+
+func Member(slotNumber uint64, address common.Address) bool {
+	set := EVSet(slotNumber)
+	evID := EVIdFromEtherbase(address)
+	return contains(evID, set)
 }
 
 // The base 0 signer index for a given slot number
 // where the genesis block is slot 0, and the current Epoch
 func EVSlot(slotNumber uint64) (uint64, uint64) {
 	return EVSlotInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+}
+
+// F is the fault function to calculate the number of required ACKs/NACKs
+func F() (float64, float64) {
+	ackRequirement := float64(2) / float64(3)
+	nackRequirement := float64(1) / float64(3)
+	return ackRequirement, nackRequirement
 }

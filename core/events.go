@@ -37,7 +37,7 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 type NewBlockValidatedEvent struct{ }
 
 // NewBlockProposalFoundEvent: used to manage timeouts
-type NewBlockProposalFoundEvent struct{ }
+type NewBlockProposalFoundEvent struct{ Valid bool }
 
 // NewBlockProposalEvent: used to instruct the ProtocolManager to send a BlockProposal
 type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
@@ -45,8 +45,17 @@ type NewBlockProposalEvent struct{ BlockProposal *dsg.BlockProposal }
 // RequestNewBlockProposalMessageEvent
 type RequestNewBlockProposalMessage struct{ RequestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage }
 
-// BlockVerifiedEvent
+// BlockVerifiedEvent: consensus found on block and trigger NewBlockMessage
 type BlockVerifiedEvent struct{ BlockProposal *dsg.BlockProposal }
+
+// ValidationResultEvent: used to manage timeouts for TS5 and TS6
+type ValidationResultEvent struct{ Valid bool }
+
+// RequestNewBlockProposalEvent - used to check for and trigger a new BP
+type RequestNewBlockProposalEvent struct { RequestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage }
+
+//SendNewValidationMessageEvent - used to broadcast Validation Messages to peers
+type SendNewValidationMessageEvent struct { ValidationMessage *dsg.ValidationMessage }
 
 // RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
