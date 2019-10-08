@@ -77,8 +77,8 @@ const (
 	staleThreshold = 7
 
 	// DSG Timouts
-	validationTimeoutDuration = 15 * time.Second
-	blockProposalTimeoutDuration = 15 * time.Second
+	validationTimeoutDuration = 3 * time.Second
+	blockProposalTimeoutDuration = 3 * time.Second
 )
 
 // environment is the worker's current environment and holds all of the current state information.
