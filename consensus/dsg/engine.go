@@ -2,6 +2,7 @@ package dsg
 
 import (
 	"bytes"
+	"github.com/unification-com/mainchain/accounts"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/consensus"
 	"github.com/unification-com/mainchain/core/state"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/crypto/sha3"
 	"io"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -22,9 +24,17 @@ var (
 	dsgExtraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for Sealing EV's signature
 )
 
+// SignerFn is a signer callback function to request a header to be signed by a
+// backing account.
+type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
+
 type Dsg struct {
 	config   *params.DsgConfig // Consensus engine configuration parameters
 	dsgCache *Cache            // DSG Cache
+
+	signer common.Address // Ethereum address of the signing key
+	signFn SignerFn       // Signer function to authorize hashes with
+	lock   sync.RWMutex   // Protects the signer fields
 }
 
 // NewDsg returns a new DSG consensus.Engine
@@ -147,7 +157,7 @@ func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// return error if we're not authorised to propose & seal
 	slot := d.getSlot(chain, header)
-	member := Member(slot, common.Address{})
+	member := Member(slot, d.signer)
 	if !member {
 		return errNotAuthorisedToPropose
 	}
@@ -190,6 +200,16 @@ func (d *Dsg) APIs(chain consensus.ChainReader) []rpc.API {
 func (d *Dsg) Close() error {
 	log.Info("engine.Close")
 	return nil
+}
+
+// Authorize injects a private key into the consensus engine to mint new blocks
+// with.
+func (d *Dsg) Authorize(signer common.Address, signFn SignerFn) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	d.signer = signer
+	d.signFn = signFn
 }
 
 func CalcDifficulty() *big.Int {
