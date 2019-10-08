@@ -1,7 +1,6 @@
 package dsg
 
 import (
-	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/log"
@@ -86,7 +85,7 @@ func (d *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (Bl
 		}
 	}
 
-	return blockProposal, errors.New("could not retrieve block proposal from cache")
+	return blockProposal, errGetBPFromCacheFailed
 }
 
 func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) {
@@ -101,7 +100,7 @@ func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) 
 		}
 	}
 
-	return blockProposal, errors.New("could not retrieve block proposal from cache")
+	return blockProposal, errGetBPFromCacheFailed
 }
 
 func (d *Cache) InsertValidationMessage(msg ValidationMessage) ValidationResult {
