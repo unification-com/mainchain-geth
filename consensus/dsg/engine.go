@@ -8,14 +8,18 @@ import (
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
+	"github.com/unification-com/mainchain/rlp"
 	"github.com/unification-com/mainchain/rpc"
+	"golang.org/x/crypto/sha3"
+	"io"
 	"math/big"
 	"time"
 )
 
 var (
-	dsgExtraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
-	dsgExtraSeal   = 65 // Fixed number of extra-data suffix bytes reserved for Sealing EV's signature
+	defaultBlockTime = 5 // default block time if none is set in DSG Config
+	dsgExtraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	dsgExtraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for Sealing EV's signature
 )
 
 type Dsg struct {
@@ -25,27 +29,33 @@ type Dsg struct {
 
 // NewDsg returns a new DSG consensus.Engine
 func NewDsg(config *params.DsgConfig) *Dsg {
+
+	conf := *config
+	if conf.BlockTime == 0 {
+		conf.BlockTime = uint64(defaultBlockTime)
+	}
+
 	return &Dsg{
-		config:   config,
+		config:   &conf,
 		dsgCache: NewCache(),
 	}
 }
 
 // Author implements engine.Author
-func (dsg *Dsg) Author(header *types.Header) (common.Address, error) {
-	log.Info("dsg engine.Author", "header.Number", header.Number)
+func (d *Dsg) Author(header *types.Header) (common.Address, error) {
+	log.Info("engine.Author", "header.Number", header.Number)
 	return common.Address{}, nil
 }
 
 // VerifyHeader implements engine.VerifyHeader
-func (dsg *Dsg) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
-	log.Info("dsg engine.VerifyHeader", "header.Number", header.Number)
+func (d *Dsg) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
+	log.Info("engine.VerifyHeader", "header.Number", header.Number)
 	return nil
 }
 
 // VerifyHeaders implements engine.VerifyHeaders
-func (dsg *Dsg) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-	log.Info("dsg engine.VerifyHeaders", "CurrentHeader", chain.CurrentHeader().Number)
+func (d *Dsg) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+	log.Info("engine.VerifyHeaders", "CurrentHeader", chain.CurrentHeader().Number)
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
@@ -53,26 +63,26 @@ func (dsg *Dsg) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 }
 
 // VerifyUncles implements engine.VerifyUncles
-func (dsg *Dsg) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
-	log.Info("dsg engine.VerifyUncles", "CurrentHeader", chain.CurrentHeader().Number)
+func (d *Dsg) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	log.Info("engine.VerifyUncles", "CurrentHeader", chain.CurrentHeader().Number)
 	return nil
 }
 
 // VerifySeal implements engine.VerifySeal
-func (dsg *Dsg) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
-	log.Info("dsg engine.VerifySeal", "header.Number", header.Number)
+func (d *Dsg) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+	log.Info("engine.VerifySeal", "header.Number", header.Number)
 	return nil
 }
 
 // Prepare implements engine.Prepare
-func (dsg *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error {
-	log.Info("dsg engine.Prepare", "header.Number", header.Number)
+func (d *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error {
+	log.Info("engine.Prepare", "header.Number", header.Number)
 
 	number := header.Number.Uint64()
 
 	header.Nonce = types.BlockNonce{} // Nonce not used in DSG. Set to empty
 	header.Difficulty = CalcDifficulty() // Difficulty not used in DSG. Set to 0x1
-	header.Coinbase = common.Address{} // Coinbase not currently used in DSG
+	header.Coinbase = common.Address{} // Coinbase not currently used in DSG. Todo: Will be required for block rewards
 
 	header.MixDigest = common.Hash{} // Todo: set MixDigest to constant hash to identify DSG blocks
 
@@ -90,7 +100,7 @@ func (dsg *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error
 	// Todo - append RLP encoded empty DsgExtra struct{}
 
 	// Set block's timestamp
-	header.Time = parent.Time + dsg.config.BlockTime
+	header.Time = parent.Time + d.config.BlockTime
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -99,10 +109,10 @@ func (dsg *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error
 }
 
 // Finalize implements engine.Finalize
-func (dsg *Dsg) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
-	log.Info("dsg engine.Finalize", "header.Number", header.Number)
+func (d *Dsg) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	log.Info("engine.Finalize", "header.Number", header.Number)
 
-	// Todo - add block rewards to EV before setting header.Root
+	// Todo - add block rewards to EV before setting header.Root - will need header.Coinbase for this
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Uncles are not used in DSG
@@ -110,10 +120,10 @@ func (dsg *Dsg) Finalize(chain consensus.ChainReader, header *types.Header, stat
 }
 
 // FinalizeAndAssemble implements engine.FinalizeAndAssemble
-func (dsg *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	log.Info("dsg engine.FinalizeAndAssemble", "header.Number", header.Number)
+func (d *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	log.Info("engine.FinalizeAndAssemble", "header.Number", header.Number)
 
-	// Todo - add block rewards to EV before setting header.Root
+	// Todo - add block rewards to EV before setting header.Root - will need header.Coinbase for this
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	// Uncles are not used in DSG
@@ -124,35 +134,109 @@ func (dsg *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.H
 }
 
 // Seal implements engine.Seal
-func (dsg *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	log.Info("dsg engine.Seal", "CurrentHeader", chain.CurrentHeader().Number)
+func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	log.Info("engine.Seal", "block.Header()", block.Header().Number)
+
+	header := block.Header()
+
+	// Sealing the genesis block is not supported
+	number := header.Number.Uint64()
+	if number == 0 {
+		return errCannotSealGenesis
+	}
+
+	// return error if we're not authorised to propose & seal
+	slot := d.getSlot(chain, header)
+	member := Member(slot, common.Address{})
+	if !member {
+		return errNotAuthorisedToPropose
+	}
+
+	// set delay to specified blocktime
+	delay := time.Unix(int64(header.Time), 0).Sub(time.Now())
+	select {
+	case <-stop:
+		return nil
+	case <-time.After(delay):
+	}
+
+	// Todo - kick off process to propose, validate etc.
+	// Todo - Need to pull in all message handling, channels, tasks etc. internally
+	// Todo - push all signatures into extraData
+	// Todo - final verified block.WithSeal(header) needs to be pushed to the results chan<-
+
 	return nil
 }
 
 // SealHash implements engine.SealHash
-func (dsg *Dsg) SealHash(header *types.Header) common.Hash {
-	log.Info("dsg engine.SealHash", "header.Number", header.Number)
-	return common.Hash{}
+func (d *Dsg) SealHash(header *types.Header) common.Hash {
+	log.Info("engine.SealHash", "header.Number", header.Number)
+	return SealHash(header)
 }
 
 // CalcDifficulty implements engine.CalcDifficulty
-func (dsg *Dsg) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
-	log.Info("dsg engine.CalcDifficulty", "CurrentHeader", chain.CurrentHeader().Number)
+func (d *Dsg) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
+	log.Info("engine.CalcDifficulty", "CurrentHeader", chain.CurrentHeader().Number)
 	return CalcDifficulty()
 }
 
 // APIs implements engine.APIs
-func (dsg *Dsg) APIs(chain consensus.ChainReader) []rpc.API {
-	log.Info("dsg engine.APIs")
+func (d *Dsg) APIs(chain consensus.ChainReader) []rpc.API {
+	log.Info("engine.APIs")
 	return []rpc.API{}
 }
 
 // Close implements engine.Close
-func (dsg *Dsg) Close() error {
-	log.Info("dsg engine.Close")
+func (d *Dsg) Close() error {
+	log.Info("engine.Close")
 	return nil
 }
 
 func CalcDifficulty() *big.Int {
 	return common.Big1
+}
+
+// SealHash returns the hash of a block prior to it being sealed.
+func SealHash(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewLegacyKeccak256()
+	encodeSigHeader(hasher, header)
+	hasher.Sum(hash[:0])
+	return hash
+}
+
+func (d *Dsg) getSlot(chain consensus.ChainReader, header *types.Header) uint64 {
+	number := header.Number.Uint64()
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	slot := parent.SlotCount + d.dsgCache.GetInvalidCounter() + 1
+
+	return slot
+}
+
+func encodeSigHeader(w io.Writer, header *types.Header) {
+	err := rlp.Encode(w, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
+		header.MixDigest,
+		header.Nonce,
+	})
+	if err != nil {
+		panic("can't encode: " + err.Error())
+	}
+}
+
+func DSGRLP(header *types.Header) []byte {
+	b := new(bytes.Buffer)
+	encodeSigHeader(b, header)
+	return b.Bytes()
 }
