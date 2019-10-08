@@ -76,18 +76,18 @@ func (dsg *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error
 
 	header.MixDigest = common.Hash{} // Todo: set MixDigest to constant hash to identify DSG blocks
 
+	// check this is a valid child block
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+
 	// pre-fill initial 32 bytes with empty vanity data if required
 	if len(header.Extra) < dsgExtraVanity {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, dsgExtraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:dsgExtraVanity]
 	// Todo - append RLP encoded empty DsgExtra struct{}
-
-	// check this is a valid child block
-	parent := chain.GetHeader(header.ParentHash, number-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
 
 	// Set block's timestamp
 	header.Time = parent.Time + dsg.config.BlockTime
@@ -101,11 +101,24 @@ func (dsg *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error
 // Finalize implements engine.Finalize
 func (dsg *Dsg) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	log.Info("dsg engine.Finalize", "header.Number", header.Number)
+
+	// Todo - add block rewards to EV before setting header.Root
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
+	// Uncles are not used in DSG
+	header.UncleHash = types.CalcUncleHash(nil)
 }
 
 // FinalizeAndAssemble implements engine.FinalizeAndAssemble
 func (dsg *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	log.Info("dsg engine.FinalizeAndAssemble", "header.Number", header.Number)
+
+	// Todo - add block rewards to EV before setting header.Root
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
+	// Uncles are not used in DSG
+	header.UncleHash = types.CalcUncleHash(nil)
+
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
 }
