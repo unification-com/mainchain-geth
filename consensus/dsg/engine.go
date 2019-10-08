@@ -11,7 +11,16 @@ import (
 )
 
 type Dsg struct {
-	config *params.DsgConfig // Consensus engine configuration parameters
+	config   *params.DsgConfig // Consensus engine configuration parameters
+	dsgCache *Cache            // DSG Cache
+}
+
+// NewDsg returns a new DSG consensus.Engine
+func NewDsg(config *params.DsgConfig) *Dsg {
+	return &Dsg{
+		config:   config,
+		dsgCache: NewCache(),
+	}
 }
 
 // Author implements engine.Author
