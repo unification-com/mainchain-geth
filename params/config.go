@@ -225,9 +225,12 @@ var (
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
+		Dsg: &DsgConfig{
+			BlockTime:         15,
+			NumSignersInEpoch: 3,
+			NumSignersinRound: 3,
+			BlocksInEpoch:     24,
+			NumberOfRounds:    1,
 		},
 	}
 
