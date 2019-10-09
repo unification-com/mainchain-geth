@@ -38,8 +38,8 @@ type Dsg struct {
 	lock   sync.RWMutex   // Protects the signer fields
 }
 
-// NewDsg returns a new DSG consensus.Engine
-func NewDsg(config *params.DsgConfig) *Dsg {
+// NewEngine returns a new DSG consensus.Engine
+func NewEngine(config *params.DsgConfig) *Dsg {
 
 	conf := *config
 	if conf.BlockTime == 0 {
@@ -119,6 +119,8 @@ func (d *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, dsgExtraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:dsgExtraVanity]
+	// append 65 bytes
+	header.Extra = append(header.Extra, make([]byte, dsgExtraSeal)...)
 	// Todo - append RLP encoded empty DsgExtra struct{}
 
 	// Set block's timestamp
@@ -176,11 +178,6 @@ func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan
 
 	// set delay to specified blocktime
 	delay := time.Unix(int64(header.Time), 0).Sub(time.Now())
-	select {
-	case <-stop:
-		return nil
-	case <-time.After(delay):
-	}
 
 	d.lock.RLock()
 	signer, signFn := d.signer, d.signFn
@@ -198,6 +195,12 @@ func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	// Todo - final verified block.WithSeal(header) needs to be pushed to the results chan<-
 
 	go func() {
+		select {
+		case <-stop:
+			return
+		case <-time.After(delay):
+		}
+
 		select {
 		case results <- block.WithSeal(header):
 		default:
@@ -275,7 +278,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Extra)-65], // Yes, this will panic if extra is too short
+		header.Extra[:len(header.Extra)-dsgExtraSeal], // Yes, this will panic if extra is too short
 		header.MixDigest,
 		header.Nonce,
 	})
