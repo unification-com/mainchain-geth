@@ -7,6 +7,7 @@ import (
 	"github.com/unification-com/mainchain/consensus"
 	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
+	"github.com/unification-com/mainchain/crypto"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
 	"github.com/unification-com/mainchain/rlp"
@@ -54,7 +55,8 @@ func NewDsg(config *params.DsgConfig) *Dsg {
 // Author implements engine.Author
 func (d *Dsg) Author(header *types.Header) (common.Address, error) {
 	log.Info("engine.Author", "header.Number", header.Number)
-	return common.Address{}, nil
+	// Todo - get Author from DsgExtra struct{}
+	return ecrecover(header)
 }
 
 // VerifyHeader implements engine.VerifyHeader
@@ -68,6 +70,16 @@ func (d *Dsg) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header
 	log.Info("engine.VerifyHeaders", "CurrentHeader", chain.CurrentHeader().Number)
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
+
+	go func() {
+		for _, _ = range headers {
+			select {
+			case <-abort:
+				return
+			case results <- nil:
+			}
+		}
+	}()
 
 	return abort, results
 }
@@ -170,11 +182,28 @@ func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan
 	case <-time.After(delay):
 	}
 
+	d.lock.RLock()
+	signer, signFn := d.signer, d.signFn
+	d.lock.RUnlock()
+
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, DSGRLP(header)) // Todo - mimetype
+	if err != nil {
+		return err
+	}
+
+	copy(header.Extra[len(header.Extra)-dsgExtraSeal:], sighash)
 	// Todo - kick off process to propose, validate etc.
 	// Todo - Need to pull in all message handling, channels, tasks etc. internally
 	// Todo - push all signatures into extraData
 	// Todo - final verified block.WithSeal(header) needs to be pushed to the results chan<-
 
+	go func() {
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
+		}
+	}()
 	return nil
 }
 
@@ -259,4 +288,22 @@ func DSGRLP(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
 	return b.Bytes()
+}
+
+func ecrecover(header *types.Header) (common.Address, error) {
+	// Retrieve the signature from the header extra-data
+	if len(header.Extra) < dsgExtraSeal {
+		return common.Address{}, errMissingSignature
+	}
+	signature := header.Extra[len(header.Extra)-dsgExtraSeal:]
+
+	// Recover the public key and the Ethereum address
+	pubkey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	var signer common.Address
+	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+	return signer, nil
 }
