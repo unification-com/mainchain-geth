@@ -65,7 +65,7 @@ func (d *Dsg) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 			// if the accepted block was this EV's, post the BlockVerifiedEvent to send
 			// final block back to engine.Seal
 			if evid == d.EVIdFromEtherbase(validationMessage.Proposer) {
-				log.Info("Network accepting my block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
+				log.Info("Network accepting my block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer, "txs", len(blockProposal.ProposedBlock.Transactions()))
 				if err != nil {
 					log.Error("Block Proposal not found in cache", "err", err)
 					return true, err
@@ -109,7 +109,7 @@ func (d *Dsg) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 		// cache BP
 		d.dsgCache.InsertBlockProposal(proposal)
 		valid := d.ValidateBlockProposal(proposal)
-		log.Info("BlockProposal Received", "num", proposal.Number, "proposer", proposal.Proposer, "valid", valid)
+		log.Info("BlockProposal Received", "num", proposal.Number, "proposer", proposal.Proposer, "txs", len(proposal.ProposedBlock.Transactions()), "valid", valid)
 
 		go d.dsgEventMux.Post(NewBlockProposalFoundEvent{valid})
 

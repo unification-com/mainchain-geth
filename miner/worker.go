@@ -531,7 +531,7 @@ func (w *worker) taskLoop() {
 			}
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
-			log.Info("worker - receive on w.taskCh", "num", task.block.Header(), "sealhash", sealHash, "prev", prev, "txs", len(task.block.Transactions()))
+			log.Info("worker - receive on w.taskCh", "num", task.block.Header().Number, "sealhash", sealHash, "prev", prev, "txs", len(task.block.Transactions()))
 
 			if sealHash == prev {
 				continue
@@ -611,7 +611,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(), "sealhash", sealhash, "hash", hash,
-				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
+				"elapsed", common.PrettyDuration(time.Since(task.createdAt)), "txs", len(block.Transactions()))
 
 			// Broadcast the block and announce chain insertion event
 			w.mux.Post(core.NewMinedBlockEvent{Block: block})
@@ -985,6 +985,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+	log.Info("worker - finish engine.FinalizeAndAssemble", "num", block.Number(), "txs", len(block.Transactions()))
 	if w.isRunning() {
 		if interval != nil {
 			interval()

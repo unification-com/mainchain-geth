@@ -325,10 +325,10 @@ func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan
 		select {
 		case verifiedBlock := <-d.verifiedBlockCh:
 			// block verified be EVs - return it to worker's results chan<-
-			log.Info("engine.Seal - verifiedBlock received. pass block back to worker", "num", verifiedBlock.FinalBlock.Number())
+			log.Info("engine.Seal - verifiedBlock received. pass block back to worker", "num", verifiedBlock.FinalBlock.Number(), "txs", len(verifiedBlock.FinalBlock.Transactions()))
 		    results <- verifiedBlock.FinalBlock.WithSeal(verifiedBlock.FinalBlock.Header())
 		    return
-		case <- tmpDelay.C: // todo: get rid of this egregious hack
+		case <-tmpDelay.C: // todo: get rid of this egregious hack
 			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
 		}
 	}()

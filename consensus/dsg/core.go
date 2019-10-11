@@ -25,6 +25,7 @@ func (d *Dsg) coreLoop() {
 			if obj != nil {
 				if ev, ok := obj.Data.(BlockVerifiedEvent); ok {
 					// network accepted this EV's block. Send back to engine.Seal
+					log.Info("BlockVerifiedEvent received", "num", ev.BlockProposal.ProposedBlock.Number(), "txs", len(ev.BlockProposal.ProposedBlock.Transactions()))
 					select {
 					case d.verifiedBlockCh <- &VerifiedBlock{FinalBlock: ev.BlockProposal.ProposedBlock}:
 					}
@@ -84,10 +85,12 @@ func (d *Dsg) coreLoop() {
 					log.Info("receiveRequestNewBlockProposalSub.Chan", "bpRequired", bpRequired, "v", v)
 
 					if bpRequired && v{
-						log.Info("new block proposal request for me - I should broadcast my BP")
 						// Todo - correct the newBlock stuff
 						newBlock := d.SetSlotNumberInBlock(bp.ProposedBlock)
 						blockProposal := d.ProposeBlock(newBlock, d.signer)
+
+
+						log.Info("new block proposal request for me - I should broadcast my BP", "num", blockProposal.ProposedBlock.Number(), "txs", len(blockProposal.ProposedBlock.Transactions()))
 
 						//validate, cache and broadcast own validation message
 						valid := d.ValidateBlockProposal(blockProposal)
