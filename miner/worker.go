@@ -27,7 +27,6 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/consensus"
-	"github.com/unification-com/mainchain/consensus/dsg"
 	"github.com/unification-com/mainchain/consensus/misc"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/core/state"
@@ -75,10 +74,6 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
-
-	// DSG Timouts
-	validationTimeoutDuration = 3 * time.Second
-	blockProposalTimeoutDuration = 3 * time.Second
 )
 
 // environment is the worker's current environment and holds all of the current state information.
@@ -141,11 +136,6 @@ type worker struct {
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
-	verifiedBlockSub *event.TypeMuxSubscription
-	newBlockValidSub *event.TypeMuxSubscription
-	newBlockPropoSub *event.TypeMuxSubscription
-	validationResSub *event.TypeMuxSubscription
-	requestNewBlockProposalSub *event.TypeMuxSubscription
 
 	// Channels
 	newWorkCh          chan *newWorkReq
@@ -171,10 +161,6 @@ type worker struct {
 	snapshotMu    sync.RWMutex // The lock used to protect the block snapshot and state snapshot
 	snapshotBlock *types.Block
 	snapshotState *state.StateDB
-
-	// Timers
-	timeoutBlockProposal *time.Timer
-	validationTimeout *time.Timer
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -219,15 +205,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
-
-	worker.verifiedBlockSub = mux.Subscribe(core.BlockVerifiedEvent{})
-	worker.newBlockValidSub = mux.Subscribe(core.NewBlockValidatedEvent{})
-	worker.newBlockPropoSub = mux.Subscribe(core.NewBlockProposalFoundEvent{})
-	worker.validationResSub = mux.Subscribe(core.ValidationResultEvent{})
-	worker.requestNewBlockProposalSub = mux.Subscribe(core.RequestNewBlockProposalEvent{})
-
-	worker.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
-	worker.validationTimeout = time.NewTimer(validationTimeoutDuration)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -288,12 +265,21 @@ func (w *worker) pendingBlock() *types.Block {
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
 	atomic.StoreInt32(&w.running, 1)
+
+	if dsg, ok := w.engine.(consensus.DsgEngine); ok {
+		dsg.Start(w.chain, w.chain.CurrentBlock)
+	}
+
 	w.startCh <- struct{}{}
 }
 
 // stop sets the running status as 0.
 func (w *worker) stop() {
 	atomic.StoreInt32(&w.running, 0)
+
+	if dsg, ok := w.engine.(consensus.DsgEngine); ok {
+		dsg.Stop()
+	}
 }
 
 // isRunning returns an indicator whether worker is running or not.
@@ -370,12 +356,15 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
+			if h, ok := w.engine.(consensus.DsgMsgHandler); ok {
+				h.NewChainHead()
+			}
 			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
-			if w.isRunning() && ((w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) || (w.chainConfig.Dsg == nil || w.chainConfig.Dsg.BlockTime > 0)) {
+			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
 				if atomic.LoadInt32(&w.newTxs) == 0 {
 					timer.Reset(recommit)
@@ -522,12 +511,6 @@ func (w *worker) mainLoop() {
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
 // push them to consensus engine.
 func (w *worker) taskLoop() {
-
-	defer w.verifiedBlockSub.Unsubscribe()
-	defer w.newBlockValidSub.Unsubscribe()
-	defer w.newBlockPropoSub.Unsubscribe()
-	w.validationTimeout.Stop()
-
 	var (
 		stopCh chan struct{}
 		prev   common.Hash
@@ -540,153 +523,16 @@ func (w *worker) taskLoop() {
 			stopCh = nil
 		}
 	}
-
 	for {
 		select {
-		case obj := <-w.verifiedBlockSub.Chan():
-			if obj != nil {
-				if ev, ok := obj.Data.(core.BlockVerifiedEvent); ok {
-					if err := w.engine.Seal(w.chain, ev.BlockProposal.ProposedBlock, w.resultCh, stopCh); err != nil {
-						log.Warn("Block sealing failed", "err", err)
-					}
-				}
-			}
-
-		case obj := <-w.newBlockValidSub.Chan():
-			if obj != nil {
-				if ev, ok := obj.Data.(core.NewBlockValidatedEvent); ok {
-					log.Info("NewBlockValidatedEvent", "ev", ev)
-					w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-					cache := w.chain.GetDSGCache()
-					cache.ResetInvalidCounter()
-				}
-			}
-
-		case obj := <-w.newBlockPropoSub.Chan():
-			if obj != nil {
-				if ev, ok := obj.Data.(core.NewBlockProposalFoundEvent); ok {
-					log.Info("NewBlockProposalFoundEvent", "valid", ev.Valid)
-					if ev.Valid {
-						w.validationTimeout.Reset(validationTimeoutDuration)
-					}
-					w.timeoutBlockProposal.Stop()
-				}
-			}
-
-		case obj := <-w.validationResSub.Chan():
-			if obj != nil {
-				if ev, ok := obj.Data.(core.ValidationResultEvent); ok {
-					log.Info("ValidationResultEvent", "ev", ev)
-					if ev.Valid == true {
-						w.timeoutBlockProposal.Stop()
-						w.validationTimeout.Stop()
-					}
-					if ev.Valid == false {
-						w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-						w.validationTimeout.Stop()
-					}
-				}
-			}
-
-		case obj := <-w.requestNewBlockProposalSub.Chan():
-			if obj != nil {
-				if ev, ok := obj.Data.(core.RequestNewBlockProposalEvent); ok {
-					cache := w.chain.GetDSGCache()
-					numInvalids := cache.GetInvalidCounter()
-					bpRequired := cache.InsertRequestNewBlockProposalMessage(*ev.RequestNewBlockProposalMessage)
-					parent := w.chain.CurrentHeader()
-					v := dsg.Authorized(*parent, numInvalids, w.coinbase)
-
-					log.Info("requestNewBlockProposalSub.Chan", "bpRequired", bpRequired, "v", v)
-
-					if bpRequired && v{
-
-						log.Info("new block proposal request for me - I should broadcast my BP")
-						bp, err := cache.GetBlockProposal(ev.RequestNewBlockProposalMessage.Number, w.coinbase)
-
-						if err != nil {
-							log.Info(" error - could not find my bp in cache", "num", ev.RequestNewBlockProposalMessage.Number, "err", err, "etherbase", w.coinbase)
-						} else {
-							log.Info("found my cached bp - sending proposal to peers")
-							newBlock := dsg.SetSlotNumber(*parent, bp.ProposedBlock, numInvalids)
-							blockProposal := dsg.ProposeBlock(newBlock, w.coinbase)
-
-							//validate, cache and broadcast own validation message
-							valid := blockProposal.ValidateBlockProposal(parent, cache)
-							vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
-							cache.InsertValidationMessage(vm)
-							go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
-							go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
-							go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
-						}
-					}
-				}
-			}
-
-		case timeoutBlockProposalFire := <-w.timeoutBlockProposal.C:
-			log.Info("timeoutBlockProposal fired", "timer", timeoutBlockProposalFire)
-			cache := w.chain.GetDSGCache()
-			cache.IncrementInvalidCounter()
-
-			w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-
-			requestBlockNumber := big.NewInt(1)
-			requestBlockNumber = requestBlockNumber.Add(requestBlockNumber,  w.chain.CurrentHeader().Number)
-			numInvalids := cache.GetInvalidCounter()
-			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
-			expectedSignerIndex, _ := dsg.EVSlot(slot)
-			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
-
-			rbp := dsg.RequestNewBlockProposalMessage{
-				Number:    requestBlockNumber,
-				Verifier:  w.coinbase,
-				Signature: common.Hash{},
-			}
-			log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
-
-			// post RequestNewBlockProposalEvent and broadcast RequestNewBlockProposalMessage
-			go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
-			go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
-
-		case validationTimeoutFire := <-w.validationTimeout.C:
-			log.Info("validationTimeoutFire fired", "timer", validationTimeoutFire)
-
-			cache := w.chain.GetDSGCache()
-			requiredBlockNumber := big.NewInt(1)
-			requiredBlockNumber = requiredBlockNumber.Add(requiredBlockNumber,  w.chain.CurrentHeader().Number)
-
-			numInvalids := cache.GetInvalidCounter()
-			slot := w.chain.CurrentHeader().SlotCount + 1 + numInvalids
-			expectedSignerIndex, _ := dsg.EVSlot(slot)
-			expectedSigner := dsg.EtherbaseFromEVId(expectedSignerIndex)
-			status := cache.QueryValidationState(requiredBlockNumber, expectedSigner)
-
-			if status == dsg.Unknown || status == dsg.Reject {
-				cache.IncrementInvalidCounter()
-				w.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
-				w.validationTimeout.Stop()
-
-				rbp := dsg.RequestNewBlockProposalMessage{
-					Number:    requiredBlockNumber,
-					Verifier:  w.coinbase,
-					Signature: common.Hash{},
-				}
-				log.Info("request new block proposal", "num", rbp.Number, "numInv", numInvalids, "slot", slot, "expectedSignerIndex", expectedSignerIndex, "expectedSigner", expectedSigner)
-
-				go w.mux.Post(core.RequestNewBlockProposalEvent{RequestNewBlockProposalMessage:&rbp})
-				go w.mux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
-			}
-			if status == dsg.Accept {
-				w.timeoutBlockProposal.Stop()
-				w.validationTimeout.Stop()
-			}
-
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
+			log.Info("worker - receive on w.taskCh", "num", task.block.Header(), "sealhash", sealHash, "prev", prev, "txs", len(task.block.Transactions()))
+
 			if sealHash == prev {
 				continue
 			}
@@ -701,33 +547,9 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[w.engine.SealHash(task.block.Header())] = task
 			w.pendingMu.Unlock()
 
-			cache := w.chain.GetDSGCache()
-			numInvalids := cache.GetInvalidCounter()
-
-			parent := w.chain.CurrentHeader()
-			v := dsg.Authorized(*parent, numInvalids, w.coinbase)
-
-			newBlock := dsg.SetSlotNumber(*parent, task.block, numInvalids)
-
-			blockProposal := dsg.ProposeBlock(newBlock, w.config.Etherbase)
-			cache.InsertBlockProposal(blockProposal)
-
-			if !v {
-				log.Info("The author may not produce this block")
-				continue
+			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
+				log.Warn("Block sealing failed", "err", err)
 			}
-			log.Info("⭐ The author may produce this block")
-
-			//validate, cache and broadcast own validation message
-			valid := blockProposal.ValidateBlockProposal(parent, cache)
-			vm := dsg.ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier:w.coinbase, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
-			cache.InsertValidationMessage(vm)
-			go w.mux.Post(core.SendNewValidationMessageEvent{ValidationMessage:&vm})
-
-			go w.mux.Post(core.NewBlockProposalEvent{BlockProposal: &blockProposal})
-
-			go w.mux.Post(core.NewBlockProposalFoundEvent{ Valid: valid})
-
 		case <-w.exitCh:
 			interrupt()
 			return
@@ -745,8 +567,10 @@ func (w *worker) resultLoop() {
 			if block == nil {
 				continue
 			}
+			log.Info("w.resultCh block received", "num", block.Number(), "txs", len(block.Transactions()))
 			// Short circuit when receiving duplicate result caused by resubmitting.
 			if w.chain.HasBlock(block.Hash(), block.NumberU64()) {
+				log.Info("w.resultCh hasBlock", "num", block.NumberU64(), "hash", block.Hash())
 				continue
 			}
 			var (

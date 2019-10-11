@@ -64,9 +64,6 @@ type chainHeightFn func() uint64
 // chainInsertFn is a callback type to insert a batch of blocks into the local chain.
 type chainInsertFn func(types.Blocks) (int, error)
 
-// dsgFilterFn is a callback that filters out blocks produced by unauthorized EVs
-type dsgFilterFn func(types.Block) bool
-
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
@@ -650,7 +647,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
 			return
 		}
-
+		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
 			// All ok, quickly propagate to our peers
