@@ -8,6 +8,7 @@ import (
 	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/crypto"
+	"github.com/unification-com/mainchain/event"
 	"github.com/unification-com/mainchain/log"
 	"github.com/unification-com/mainchain/params"
 	"github.com/unification-com/mainchain/rlp"
@@ -23,6 +24,10 @@ var (
 	defaultBlockTime = 5 // default block time if none is set in DSG Config
 	dsgExtraVanity   = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	dsgExtraSeal     = 65 // Fixed number of extra-data suffix bytes reserved for Sealing EV's signature
+
+	blockProposalTimeoutDuration = 3 * time.Second
+	validationTimeoutDuration    = 3 * time.Second
+
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
@@ -30,26 +35,101 @@ var (
 type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
 
 type Dsg struct {
-	config   *params.DsgConfig // Consensus engine configuration parameters
-	dsgCache *Cache            // DSG Cache
+	config       *params.DsgConfig     // Consensus engine configuration parameters
+	dsgCache     *Cache                // DSG Cache
+	chain        consensus.ChainReader
+	currentBlock func() *types.Block
 
-	signer common.Address // Ethereum address of the signing key
-	signFn SignerFn       // Signer function to authorize hashes with
-	lock   sync.RWMutex   // Protects the signer fields
+	pm consensus.DsgProtocolManager
+
+	signer   common.Address // Ethereum address of the signing key
+	signFn   SignerFn       // Signer function to authorize hashes with
+	lock     sync.RWMutex   // Protects the signer fields
+	coreLock sync.RWMutex   // used during engine start/stop
+
+	dsgEventMux *event.TypeMux
+
+	// Channels
+	verifiedBlockCh chan *VerifiedBlock
+
+	// Receiver subscriptions
+	receiveVerifiedBlockSub           *event.TypeMuxSubscription
+	receiveNewBlockValidSub           *event.TypeMuxSubscription
+	receiveNewBlockProposalSub        *event.TypeMuxSubscription
+	receiveValidationResultSub        *event.TypeMuxSubscription
+	receiveRequestNewBlockProposalSub *event.TypeMuxSubscription
+
+	// Broadcaster subscriptions
+	sendRequestNewBlockProposalSub *event.TypeMuxSubscription
+	sendProposalBlockSub           *event.TypeMuxSubscription
+	sendNewValidationMessageSub    *event.TypeMuxSubscription
+
+	// Timers
+	timeoutBlockProposal *time.Timer
+	validationTimeout    *time.Timer
+
+	engineRunning bool
 }
 
 // NewEngine returns a new DSG consensus.Engine
-func NewEngine(config *params.DsgConfig) *Dsg {
+func NewEngine(config *params.DsgConfig) consensus.DsgEngine {
 
 	conf := *config
 	if conf.BlockTime == 0 {
 		conf.BlockTime = uint64(defaultBlockTime)
 	}
 
-	return &Dsg{
-		config:   &conf,
-		dsgCache: NewCache(),
+	dsg := &Dsg{
+		config:          &conf,
+		dsgCache:        NewCache(),
+		dsgEventMux:     new(event.TypeMux),
+		verifiedBlockCh: make(chan *VerifiedBlock),
+		engineRunning:   false,
 	}
+
+	// Receiver subscriptions
+	dsg.receiveVerifiedBlockSub = dsg.dsgEventMux.Subscribe(BlockVerifiedEvent{})
+	dsg.receiveNewBlockValidSub = dsg.dsgEventMux.Subscribe(NewBlockValidatedEvent{})
+	dsg.receiveNewBlockProposalSub = dsg.dsgEventMux.Subscribe(NewBlockProposalFoundEvent{})
+	dsg.receiveValidationResultSub = dsg.dsgEventMux.Subscribe(ValidationResultEvent{})
+	dsg.receiveRequestNewBlockProposalSub = dsg.dsgEventMux.Subscribe(RequestNewBlockProposalEvent{})
+
+	// Broadcaster subscriptions
+	dsg.sendRequestNewBlockProposalSub = dsg.dsgEventMux.Subscribe(RequestNewBlockProposalEvent{})
+	dsg.sendProposalBlockSub = dsg.dsgEventMux.Subscribe(SendNewBlockProposalEvent{})
+	dsg.sendNewValidationMessageSub =dsg.dsgEventMux.Subscribe(SendNewValidationMessageEvent{})
+
+	// Timers
+	dsg.timeoutBlockProposal = time.NewTimer(blockProposalTimeoutDuration)
+	dsg.validationTimeout = time.NewTimer(validationTimeoutDuration)
+
+	return dsg
+}
+
+func (d *Dsg) Start(chain consensus.ChainReader, currentBlock func() *types.Block) error {
+	log.Trace("start DsgEngine")
+	d.coreLock.Lock()
+	d.chain = chain
+	d.currentBlock = currentBlock
+
+	if !d.engineRunning {
+		d.engineRunning = true
+	}
+	d.coreLock.Unlock()
+
+	go d.coreLoop()
+	go d.broadcastLoop()
+
+	return nil
+}
+
+func (d *Dsg) Stop() error {
+	log.Trace("stop DsgEngine")
+	d.coreLock.Lock()
+	defer d.coreLock.Unlock()
+	d.engineRunning = false
+
+	return nil
 }
 
 // Author implements engine.Author
@@ -97,6 +177,7 @@ func (d *Dsg) VerifySeal(chain consensus.ChainReader, header *types.Header) erro
 }
 
 // Prepare implements engine.Prepare
+// header is the block to be proposed
 func (d *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	log.Info("engine.Prepare", "header.Number", header.Number)
 
@@ -115,19 +196,25 @@ func (d *Dsg) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	}
 
 	// pre-fill initial 32 bytes with empty vanity data if required
+	// Todo - change to RLP encoded empty DsgExtra struct{} containing EVs, seals etc.
 	if len(header.Extra) < dsgExtraVanity {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, dsgExtraVanity-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:dsgExtraVanity]
 	// append 65 bytes
 	header.Extra = append(header.Extra, make([]byte, dsgExtraSeal)...)
-	// Todo - append RLP encoded empty DsgExtra struct{}
 
-	// Set block's timestamp
+	// Set block's expected timestamp
 	header.Time = parent.Time + d.config.BlockTime
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
+
+	// Set block's expected slot number
+	// new block, so shouldn't have any invalids yet - just parent slot + 1
+	header.SlotCount = parent.SlotCount + 1
+
+	// Todo - look into perhaps resetting slot counter to 1 for each new epoch
 
 	return nil
 }
@@ -145,7 +232,7 @@ func (d *Dsg) Finalize(chain consensus.ChainReader, header *types.Header, state 
 
 // FinalizeAndAssemble implements engine.FinalizeAndAssemble
 func (d *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	log.Info("engine.FinalizeAndAssemble", "header.Number", header.Number)
+	log.Info("engine.FinalizeAndAssemble", "header.Number", header.Number, "txs", len(txs))
 
 	// Todo - add block rewards to EV before setting header.Root - will need header.Coinbase for this
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -158,52 +245,90 @@ func (d *Dsg) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Hea
 }
 
 // Seal implements engine.Seal
+// Receives the new block for sealing from the worker, then passes it to the DSG backend
+// for proposing & validation. Result is returned back to the worker on results chan<-
 func (d *Dsg) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	log.Info("engine.Seal", "block.Header()", block.Header().Number)
+	log.Info("engine.Seal", "block.Header()", block.Header().Number, "txs", len(block.Transactions()))
 
 	header := block.Header()
 
-	// Sealing the genesis block is not supported
-	number := header.Number.Uint64()
-	if number == 0 {
+	// No point sealing genesis
+	if header.Number.Uint64() == 0 {
 		return errCannotSealGenesis
 	}
-
-	// return error if we're not authorised to propose & seal
-	slot := d.getSlot(chain, header)
-	member := Member(slot, d.signer)
-	if !member {
-		return errNotAuthorisedToPropose
-	}
-
-	// set delay to specified blocktime
-	delay := time.Unix(int64(header.Time), 0).Sub(time.Now())
 
 	d.lock.RLock()
 	signer, signFn := d.signer, d.signFn
 	d.lock.RUnlock()
 
-	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, DSGRLP(header)) // Todo - mimetype
+	slot := header.SlotCount // set during engine.Prepare. Should just be parent.SlotCount + 1
+
+	// return error if we're not authorised to propose & seal - i.e. not a member fo the current round
+	member := d.Member(slot, d.signer)
+	if !member {
+		return errNotAuthorisedToPropose
+	}
+
+	// check if it's our turn to seal & propose
+	v := d.Authorized(header)
+
+	// set delay to specified block time
+	delay := time.Unix(int64(header.Time), 0).Sub(time.Now())
+
+	// Sign
+	// Todo - modify extraData to DsgExtra struct{} containing EVs, seals etc.
+	sighash, err := signFn(accounts.Account{Address: signer}, accounts.MimetypeClique, DSGRLP(header)) // Todo - MimetypeClique?
 	if err != nil {
 		return err
 	}
 
+	// inject the signature
 	copy(header.Extra[len(header.Extra)-dsgExtraSeal:], sighash)
-	// Todo - kick off process to propose, validate etc.
-	// Todo - Need to pull in all message handling, channels, tasks etc. internally
-	// Todo - push all signatures into extraData
-	// Todo - final verified block.WithSeal(header) needs to be pushed to the results chan<-
 
+	// seal
+	block = block.WithSeal(header)
+
+	// generate proposal & cache locally
+	blockProposal := d.ProposeBlock(block, signer)
+	d.dsgCache.InsertBlockProposal(blockProposal)
+
+	// no need to run until block proposal process has begun
+	d.timeoutBlockProposal.Stop()
+	d.validationTimeout.Stop()
+
+	log.Info("delay until block time", "delay",  common.PrettyDuration(delay))
+
+	// tmp delay
+	tmpDelay := time.NewTimer(15 * time.Second) // todo: get rid of this egregious hack
 	go func() {
 		select {
 		case <-stop:
 			return
 		case <-time.After(delay):
+			if v {
+				log.Info("The EV is in turn to be first to propose this block")
+				//validate, cache and broadcast own validation message
+				valid := d.ValidateBlockProposal(blockProposal)
+				vm := ValidationMessage{Number: blockProposal.Number, BlockHash: blockProposal.BlockHash, Verifier: signer, Proposer: blockProposal.Proposer, Signature: common.Hash{}, Authorize:valid}
+				d.dsgCache.InsertValidationMessage(vm)
+				go d.dsgEventMux.Post(SendNewValidationMessageEvent{ValidationMessage:&vm})
+
+				// broadcast BP, and check for incoming validation messages
+				go d.dsgEventMux.Post(SendNewBlockProposalEvent{BlockProposal: &blockProposal})
+				go d.dsgEventMux.Post(NewBlockProposalFoundEvent{ Valid: valid})
+			} else {
+				// Not this EV's turn, start timer and wait for incoming BP
+				d.timeoutBlockProposal.Reset(blockProposalTimeoutDuration)
+			}
 		}
 
 		select {
-		case results <- block.WithSeal(header):
-		default:
+		case verifiedBlock := <-d.verifiedBlockCh:
+			// block verified be EVs - return it to worker's results chan<-
+			log.Info("engine.Seal - verifiedBlock received. pass block back to worker", "num", verifiedBlock.FinalBlock.Number())
+		    results <- verifiedBlock.FinalBlock.WithSeal(verifiedBlock.FinalBlock.Header())
+		    return
+		case <- tmpDelay.C: // todo: get rid of this egregious hack
 			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header))
 		}
 	}()
@@ -254,14 +379,6 @@ func SealHash(header *types.Header) (hash common.Hash) {
 	encodeSigHeader(hasher, header)
 	hasher.Sum(hash[:0])
 	return hash
-}
-
-func (d *Dsg) getSlot(chain consensus.ChainReader, header *types.Header) uint64 {
-	number := header.Number.Uint64()
-	parent := chain.GetHeader(header.ParentHash, number-1)
-	slot := parent.SlotCount + d.dsgCache.GetInvalidCounter() + 1
-
-	return slot
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {

@@ -18,6 +18,7 @@
 package consensus
 
 import (
+	"github.com/unification-com/mainchain/p2p"
 	"math/big"
 
 	"github.com/unification-com/mainchain/common"
@@ -122,4 +123,27 @@ type PoW interface {
 
 	// Hashrate returns the current mining hashrate of a PoW consensus engine.
 	Hashrate() float64
+}
+
+// DsgMsgHandler should be implemented is the consensus needs to handle and send peer's message
+type DsgMsgHandler interface {
+	// NewChainHead handles a new head block comes
+	NewChainHead() error
+
+	// HandleMsg handles a message from peer
+	HandleMsg(from common.Address, data p2p.Msg) (bool, error)
+
+	// SetBroadcaster sets the broadcaster to send message to peers
+	SetProtocolManager(DsgProtocolManager)
+}
+
+// DSG Consensus
+type DsgEngine interface {
+	Engine
+
+	// Start starts the engine
+	Start(chain ChainReader, currentBlock func() *types.Block) error
+
+	// Stop stops the engine
+	Stop() error
 }

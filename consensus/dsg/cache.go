@@ -36,7 +36,7 @@ type ValidationKey struct {
 }
 
 type ProposalKey struct {
-	BlockNum common.Hash     `json:"blocknum"`
+	BlockNum uint64     `json:"blocknum"`
 	Proposer common.Address  `json:"proposer"`
 }
 
@@ -60,26 +60,26 @@ func NewCache() *Cache {
 	return cache
 }
 
-func (d *Cache) InsertBlockProposal(bp BlockProposal) {
+func (c *Cache) InsertBlockProposal(bp BlockProposal) {
 	key := ProposalKey{
-		BlockNum: common.BytesToHash(bp.Number.Bytes()),
+		BlockNum: bp.Number.Uint64(),
 		Proposer: bp.Proposer,
 	}
 
-	if ok := d.proposals.Contains(key); !ok {
+	if ok := c.proposals.Contains(key); !ok {
 		log.Info("cache new block proposal", "num", bp.Number, "proposer", bp.Proposer)
-		d.proposals.Add(key, bp)
+		c.proposals.Add(key, bp)
 	}
 }
 
-func (d *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
+func (c *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (BlockProposal, error) {
 	key := ProposalKey{
-		BlockNum: common.BytesToHash(blockNum.Bytes()),
+		BlockNum: blockNum.Uint64(),
 		Proposer: proposer,
 	}
 
 	var blockProposal BlockProposal
-	if bp, ok := d.proposals.Get(key); ok {
+	if bp, ok := c.proposals.Get(key); ok {
 		if blockProposal, ok = bp.(BlockProposal); ok {
 			return blockProposal, nil
 		}
@@ -88,10 +88,10 @@ func (d *Cache) GetBlockProposal(blockNum *big.Int, proposer common.Address) (Bl
 	return blockProposal, errGetBPFromCacheFailed
 }
 
-func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) {
+func (c *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) {
 	var blockProposal BlockProposal
-	for _, key := range d.proposals.Keys() {
-		if bp, ok := d.proposals.Get(key); ok {
+	for _, key := range c.proposals.Keys() {
+		if bp, ok := c.proposals.Get(key); ok {
 			if blockProposal, ok = bp.(BlockProposal); ok {
 				if blockProposal.BlockHash == hash {
 					return blockProposal, nil
@@ -103,11 +103,11 @@ func (d *Cache) GetBlockProposalByHash(hash common.Hash) (BlockProposal, error) 
 	return blockProposal, errGetBPFromCacheFailed
 }
 
-func (d *Cache) InsertValidationMessage(msg ValidationMessage) ValidationResult {
-	return d.insertValidationMessage(msg)
+func (c *Cache) InsertValidationMessage(msg ValidationMessage) ValidationResult {
+	return c.insertValidationMessage(msg)
 }
 
-func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult {
+func (c *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult {
 	n := msg.Number
 	v := msg.Verifier
 	p := msg.Proposer
@@ -118,24 +118,24 @@ func (d *Cache) insertValidationMessage(msg ValidationMessage) ValidationResult 
 		Proposer:  p,
 	}
 
-	if ok := d.validations.Contains(key); ok {
+	if ok := c.validations.Contains(key); ok {
 		log.Info("delete stale validation message from cache", "num", msg.Number, "proposer", msg.Proposer, "validator", msg.Verifier)
-		d.validations.Remove(key)
+		c.validations.Remove(key)
 	}
 
 	log.Info("cache new validation message", "num", msg.Number, "proposer", msg.Proposer, "validator", msg.Verifier)
-	d.validations.Add(key, msg)
+	c.validations.Add(key, msg)
 
-	return d.QueryValidationState(n, p)
+	return c.QueryValidationState(n, p)
 }
 
-func (d *Cache) QueryValidationState(blockNum *big.Int, proposer common.Address) ValidationResult {
+func (c *Cache) QueryValidationState(blockNum *big.Int, proposer common.Address) ValidationResult {
 	acks := float64(0)
 	nacks := float64(0)
 
 	var validationMessage ValidationMessage
-	for _, key := range d.validations.Keys() {
-		if vm, ok := d.validations.Get(key); ok {
+	for _, key := range c.validations.Keys() {
+		if vm, ok := c.validations.Get(key); ok {
 			if validationMessage, ok = vm.(ValidationMessage); ok {
 				if (validationMessage.Number.Cmp(blockNum) == 0) && (validationMessage.Proposer == proposer) && (validationMessage.Authorize == true) {
 					acks = acks + 1
@@ -147,7 +147,7 @@ func (d *Cache) QueryValidationState(blockNum *big.Int, proposer common.Address)
 		}
 	}
 
-	ackRequirement, nackRequirement, acknowledges, rejections := d.calculateAcksNacks(common.NumSignersInRound, acks, nacks)
+	ackRequirement, nackRequirement, acknowledges, rejections := c.calculateAcksNacks(common.NumSignersInRound, acks, nacks)
 
 	if acknowledges >= ackRequirement {
 		return Accept
@@ -159,13 +159,13 @@ func (d *Cache) QueryValidationState(blockNum *big.Int, proposer common.Address)
 }
 
 // CalculateAcksNacks is the exported function for calculateAcksNacks
-func (d *Cache) CalculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
-	return d.calculateAcksNacks(numSigners, acks, acks)
+func (c *Cache) CalculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
+	return c.calculateAcksNacks(numSigners, acks, acks)
 }
 
 // calculateAcksNacks calculates and returns the ACK/NACK requirements and
 // the actual ACK/NACK values
-func (d *Cache) calculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
+func (c *Cache) calculateAcksNacks(numSigners int, acks, nacks float64) (float64, float64, float64, float64) {
 
 	acknowledges, rejections := float64(0), float64(0)
 	totalSignersFloat := float64(numSigners)
@@ -185,46 +185,46 @@ func (d *Cache) calculateAcksNacks(numSigners int, acks, nacks float64) (float64
 // IncrementInvalidCounter is used to increase the timeoutCounter for a block.
 // It can be called when an EV times out waiting for a new BP, when a BP is
 // considered invalid according to consensus, or when waiting for 2/3 ACKs times out
-func (d *Cache) IncrementInvalidCounter() {
-	d.invalidCounterMu.Lock()
-	defer d.invalidCounterMu.Unlock()
+func (c *Cache) IncrementInvalidCounter() {
+	c.invalidCounterMu.Lock()
+	defer c.invalidCounterMu.Unlock()
 
-	d.invalidCounter = d.invalidCounter + 1
+	c.invalidCounter = c.invalidCounter + 1
 }
 
 // ResetInvalidCounter is used to reset the timeoutCounter when a block has been committed
 // so the tracking can begin again for the next block proposal(s)
-func (d *Cache) ResetInvalidCounter() {
-	d.invalidCounterMu.Lock()
-	defer d.invalidCounterMu.Unlock()
+func (c *Cache) ResetInvalidCounter() {
+	c.invalidCounterMu.Lock()
+	defer c.invalidCounterMu.Unlock()
 
-	d.invalidCounter = 0
+	c.invalidCounter = 0
 }
 
 // GetInvalidCounter is used to get the current timeoutCounter value
-func (d *Cache) GetInvalidCounter() uint64 {
-	d.invalidCounterMu.RLock()
-	defer d.invalidCounterMu.RUnlock()
+func (c *Cache) GetInvalidCounter() uint64 {
+	c.invalidCounterMu.RLock()
+	defer c.invalidCounterMu.RUnlock()
 
-	return d.invalidCounter
+	return c.invalidCounter
 }
 
 // InsertRequestNewBlockProposalMessage inserts a Request New Block Proposal message
 // into the cache, and executes QueryRequestNewBpMessageState to see if
 // 2/3 EVs agree a new BP is required
-func (d *Cache) InsertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) bool {
-	d.insertRequestNewBlockProposalMessage(msg)
-	return d.QueryRequestNewBpMessageState(msg.Number)
+func (c *Cache) InsertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) bool {
+	c.insertRequestNewBlockProposalMessage(msg)
+	return c.QueryRequestNewBpMessageState(msg.Number)
 }
 
 // QueryRequestNewBpMessageState queries the reqNewBPs cache for the given
 // block. Returns true when 2/3 EVs have sent a new request
-func (d *Cache) QueryRequestNewBpMessageState(blockNum *big.Int) bool {
+func (c *Cache) QueryRequestNewBpMessageState(blockNum *big.Int) bool {
 	numRequests := float64(0)
 
 	var reqNewBPMessage RequestNewBlockProposalMessage
-	for _, key := range d.reqNewBPs.Keys() {
-		if reqm, ok := d.reqNewBPs.Get(key); ok {
+	for _, key := range c.reqNewBPs.Keys() {
+		if reqm, ok := c.reqNewBPs.Get(key); ok {
 			if reqNewBPMessage, ok = reqm.(RequestNewBlockProposalMessage); ok {
 				if reqNewBPMessage.Number.Cmp(blockNum) == 0{
 					numRequests = numRequests + 1
@@ -233,7 +233,7 @@ func (d *Cache) QueryRequestNewBpMessageState(blockNum *big.Int) bool {
 		}
 	}
 
-	requirement, _, requests, _ := d.calculateAcksNacks(common.NumSignersInRound, numRequests, float64(0))
+	requirement, _, requests, _ := c.calculateAcksNacks(common.NumSignersInRound, numRequests, float64(0))
 
 	if requests >= requirement {
 		return true
@@ -242,15 +242,15 @@ func (d *Cache) QueryRequestNewBpMessageState(blockNum *big.Int) bool {
 	return false
 }
 
-func (d *Cache) insertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) {
+func (c *Cache) insertRequestNewBlockProposalMessage(msg RequestNewBlockProposalMessage) {
 	key := ReqNewBPKey{
 		BlockNum:  msg.Number,
 		Validator: msg.Verifier,
 	}
-	if ok := d.reqNewBPs.Contains(key); ok {
+	if ok := c.reqNewBPs.Contains(key); ok {
 		log.Info("delete stale request new block proposal message from cache", "num", msg.Number, "validator", msg.Verifier)
-		d.reqNewBPs.Remove(key)
+		c.reqNewBPs.Remove(key)
 	}
 	log.Info("cache new request new block proposal message", "num", msg.Number, "validator", msg.Verifier)
-	d.reqNewBPs.Add(key, msg)
+	c.reqNewBPs.Add(key, msg)
 }

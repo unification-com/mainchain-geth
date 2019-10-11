@@ -5,16 +5,16 @@ import (
 	"github.com/unification-com/mainchain/log"
 )
 
-func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache *Cache) bool {
-	numTimeouts := cache.GetInvalidCounter()
-	currentSlot := parentHeader.SlotCount + 1 + numTimeouts
+func (d *Dsg) ValidateBlockProposal(bp BlockProposal) bool {
+
+	currentSlot := d.calculateSlot(bp.ProposedBlock.Header())
 
 	log.Info("ValidateBlockProposal", "bp.Proposer", bp.Proposer)
-	expectedSignerIndex, _ := EVSlot(currentSlot)
-	actualSignerIndex := EVIdFromEtherbase(bp.Proposer)
+	expectedSignerIndex, _ := d.EVSlot(currentSlot)
+	actualSignerIndex := d.EVIdFromEtherbase(bp.Proposer)
 
 	if expectedSignerIndex != actualSignerIndex {
-		log.Info("Invalid block proposal - expectedSignerIndex mismatch", "bpnum", bp.Number, "numInv", numTimeouts, "slot", currentSlot, "exp", expectedSignerIndex, "got", actualSignerIndex)
+		log.Info("Invalid block proposal - expectedSignerIndex mismatch", "bpnum", bp.Number, "numInv", d.dsgCache.GetInvalidCounter(), "slot", currentSlot, "exp", expectedSignerIndex, "got", actualSignerIndex)
 		return false
 	}
 
@@ -22,7 +22,7 @@ func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache
 	txDerivedHash := types.DeriveSha(bp.ProposedBlock.Transactions())
 
 	if txHash != txDerivedHash {
-		log.Info("Invalid block proposal - txHash mismatch", "block", bp.Number, "exp", txDerivedHash, "got", txHash)
+		log.Info("Invalid block proposal - txHash mismatch", "block", bp.Number, "txs", len(bp.ProposedBlock.Transactions()), "exp", txDerivedHash, "got", txHash)
 		return false
 	}
 
@@ -32,7 +32,7 @@ func (bp *BlockProposal) ValidateBlockProposal(parentHeader *types.Header, cache
 }
 
 
-func ValidateNewBlock(block *types.Block) bool {
+func (d *Dsg) ValidateNewBlock(block *types.Block) bool {
 	// TODO: Check signatures once they have been added
 	return true
 }

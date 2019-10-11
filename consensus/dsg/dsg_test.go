@@ -53,7 +53,7 @@ func TestEVSlots(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		baseOneSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber, 24, 4, 12)
+		baseOneSignerIndex, epochNumber := EVSlotInternal(testCase.SlotNumber)
 		assertEqual(t, baseOneSignerIndex, testCase.SignerIndex)
 		assertEqual(t, epochNumber, testCase.EpochNumber)
 	}

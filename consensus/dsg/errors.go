@@ -10,4 +10,6 @@ var (
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
 	// to contain a 65 byte secp256k1 signature.
 	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
+
+	errEngineNotRunning = errors.New("dsg engine not running")
 )
