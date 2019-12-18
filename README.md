@@ -1,5 +1,7 @@
 ![Unification](https://raw.githubusercontent.com/unification-com/mainchain/master/unification_logoblack.png "Unification")
 
+# DEFUNCT - PLEASE USE https://github.com/unification-com/mainchain
+
 ## UND Mainchain
 
 Official golang implementation of Unification Mainchain.
