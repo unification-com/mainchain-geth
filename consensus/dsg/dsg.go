@@ -33,7 +33,11 @@ type RequestNewBlockProposalMessage struct {
 	Signature common.Hash    `json:"signature"  gencodec:"required"`
 }
 
-func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
+type VerifiedBlock struct {
+	FinalBlock *types.Block
+}
+
+func (d *Dsg) ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 
 	log.Info("Propose block #", "num", block.Number().String(), "proposer", proposer)
 
@@ -48,35 +52,39 @@ func ProposeBlock(block *types.Block, proposer common.Address) BlockProposal {
 	return proposedBlock
 }
 
-func Authorized(parentHeader types.Header, numInvalids uint64, etherbase common.Address) bool {
+// Authorized checks if theEV is authorised to propose this block
+// Takes in header of the block to be proposed
+func (d *Dsg) Authorized(header *types.Header) bool {
+	number := header.Number.Uint64()
+	parentHeader := d.chain.GetHeader(header.ParentHash, number-1)
+
+	numInvalids := d.dsgCache.GetInvalidCounter()
 	slot := parentHeader.SlotCount + 1 + numInvalids
-	thisBlockNum := big.NewInt(1)
-	thisBlockNum = thisBlockNum.Add(thisBlockNum, parentHeader.Number)
 
-	expectedSignerIndex, _ := EVSlot(slot)
-	actualSignerIndex := EVIdFromEtherbase(etherbase)
+	expectedSignerIndex, _ := d.EVSlot(slot)
+	actualSignerIndex := d.EVIdFromEtherbase(d.signer)
 
-	log.Info("dsg authorise", "block", thisBlockNum, "parent", parentHeader.Number, "numInvalids", numInvalids, "p_slot", parentHeader.SlotCount, "slot", slot, "etherbase", etherbase, "exp", expectedSignerIndex, "act", actualSignerIndex)
+	log.Info("dsg authorise", "block", number, "parent", parentHeader.Number, "numInvalids", numInvalids, "p_slot", parentHeader.SlotCount, "slot", slot, "etherbase", d.signer, "exp", expectedSignerIndex, "act", actualSignerIndex)
 
 	return expectedSignerIndex == actualSignerIndex
 }
 
-func SetSlotNumber(parentHeader types.Header, block *types.Block, numInvalids uint64) *types.Block {
-	// if parent was genesis, use 0 as parentSlotCount
-
-	parentSlotCount := uint64(0)
-	if block.Number().Cmp(big.NewInt(1)) == 1 {
-		parentSlotCount = parentHeader.SlotCount
-	}
+func (d *Dsg) SetSlotNumberInBlock(block *types.Block) *types.Block {
+	slot := d.calculateSlot(block.Header())
 
 	header := block.Header()
-	header.SlotCount = parentSlotCount + 1 + numInvalids
+	header.SlotCount = slot
+	// Todo - need to re-sign extraData here?
 	newBlock := block.WithSeal(header)
 
 	return newBlock
 }
 
-func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) (uint64, uint64) {
+func (d *Dsg) EVSlotInternal(slotNumber uint64) (uint64, uint64) {
+	blocksInEpoch := d.config.BlocksInEpoch
+	numRounds := d.config.NumberOfRounds
+	numSigners := d.config.NumSignersinRound
+
 	var slotNumberBase0 = slotNumber - 1
 	var slotIndex = slotNumberBase0 % blocksInEpoch
 	var epochNumber = slotNumberBase0 / blocksInEpoch
@@ -90,7 +98,7 @@ func EVSlotInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, n
 	return signerIndex, epochNumber
 }
 
-func contains(a uint64, list []uint64) bool {
+func (d *Dsg) contains(a uint64, list []uint64) bool {
 	for _, b := range list {
 		if b == a {
 			return true
@@ -99,7 +107,12 @@ func contains(a uint64, list []uint64) bool {
 	return false
 }
 
-func EVSetInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, numSigners uint64) []uint64 {
+func (d *Dsg) EVSetInternal(slotNumber uint64) []uint64 {
+
+	blocksInEpoch := d.config.BlocksInEpoch
+	numRounds := d.config.NumberOfRounds
+	numSigners := d.config.NumSignersinRound
+
 	var slotNumberBase0 = slotNumber - 1
 	var slotIndex = slotNumberBase0 % blocksInEpoch
 
@@ -117,20 +130,36 @@ func EVSetInternal(slotNumber uint64, blocksInEpoch uint64, numRounds uint64, nu
 	return ret
 }
 
-func EVSet(slotNumber uint64) []uint64 {
-	return EVSetInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+func (d *Dsg) EVSet(slotNumber uint64) []uint64 {
+	return d.EVSetInternal(slotNumber)
 }
 
-func Member(slotNumber uint64, address common.Address) bool {
-	set := EVSet(slotNumber)
-	evID := EVIdFromEtherbase(address)
-	return contains(evID, set)
+func (d *Dsg) Member(slotNumber uint64, address common.Address) bool {
+	set := d.EVSet(slotNumber)
+	evID := d.EVIdFromEtherbase(address)
+	return d.contains(evID, set)
 }
 
 // The base 0 signer index for a given slot number
 // where the genesis block is slot 0, and the current Epoch
-func EVSlot(slotNumber uint64) (uint64, uint64) {
-	return EVSlotInternal(slotNumber, common.BlocksInEpoch, common.NumberOfRounds, common.NumSignersInRound)
+func (d *Dsg) EVSlot(slotNumber uint64) (uint64, uint64) {
+	return d.EVSlotInternal(slotNumber)
+}
+
+// calculateSlot returns the slot for the current block being processed
+// by the network. Slot is based on parent.SlotCount + 1 + numInvalids
+func (d *Dsg) calculateSlot(header *types.Header) uint64 {
+	slot := uint64(1)
+	number := header.Number.Uint64()
+	parent := d.chain.GetHeader(header.ParentHash, number-1)
+	if parent != nil {
+		slot = parent.SlotCount + d.dsgCache.GetInvalidCounter() + 1
+	} else {
+		log.Info("calculateSlot - parent not found", "num", number, "parentHash", header.ParentHash)
+		slot = d.dsgCache.GetInvalidCounter() + 1
+	}
+
+	return slot
 }
 
 // F is the fault function to calculate the number of required ACKs/NACKs

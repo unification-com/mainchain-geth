@@ -27,11 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/common/mclock"
 	"github.com/unification-com/mainchain/common/prque"
 	"github.com/unification-com/mainchain/consensus"
-	"github.com/unification-com/mainchain/consensus/dsg"
 	"github.com/unification-com/mainchain/core/rawdb"
 	"github.com/unification-com/mainchain/core/state"
 	"github.com/unification-com/mainchain/core/types"
@@ -43,7 +43,6 @@ import (
 	"github.com/unification-com/mainchain/params"
 	"github.com/unification-com/mainchain/rlp"
 	"github.com/unification-com/mainchain/trie"
-	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -158,8 +157,6 @@ type BlockChain struct {
 	blockCache    *lru.Cache     // Cache for the most recent entire blocks
 	futureBlocks  *lru.Cache     // future blocks are blocks added for later processing
 
-	dsgCache      *dsg.Cache	 // Cache singleton for DSG
-
 	quit    chan struct{} // blockchain quit channel
 	running int32         // running must be called atomically
 	// procInterrupt must be atomically called
@@ -199,7 +196,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,
 		db:             db,
-		dsgCache:		dsg.NewCache(),
 		triegc:         prque.New(nil),
 		stateCache:     state.NewDatabaseWithCache(db, cacheConfig.TrieCleanLimit),
 		quit:           make(chan struct{}),
@@ -296,11 +292,6 @@ func (bc *BlockChain) getProcInterrupt() bool {
 // GetVMConfig returns the block chain VM config.
 func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
-}
-
-// GetDSGCache returns the cache singleton for DSG
-func (bc *BlockChain) GetDSGCache() *dsg.Cache {
-	return bc.dsgCache
 }
 
 // empty returns an indicator whether the blockchain is empty.

@@ -11,7 +11,7 @@ type StakedWallet struct {
 	Staked  *big.Int
 }
 
-func getStakedWallets() []StakedWallet {
+func (d *Dsg) getStakedWallets() []StakedWallet {
 	// ToDo - get from stateDb, or create snapshot
 
 	stakedWallets := []StakedWallet{
@@ -24,17 +24,17 @@ func getStakedWallets() []StakedWallet {
 }
 
 // GetValidatorPool is the exported function for getValidatorPool
-func GetValidatorPool() []common.Address {
-	return getValidatorPool()
+func (d *Dsg) GetValidatorPool() []common.Address {
+	return d.getValidatorPool()
 }
 
 // getValidatorPool calculates the top staked wallet addresses and returns
 // a list of addresses of size common.NumSignersInEpoch
-func getValidatorPool() []common.Address {
+func (d *Dsg) getValidatorPool() []common.Address {
 
 	validatorPool := make([]common.Address, 0)
 
-	stakedWallets := getStakedWallets()
+	stakedWallets := d.getStakedWallets()
 	sort.Slice(stakedWallets, func(i, j int) bool {
 		cmp := stakedWallets[i].Staked.Cmp(stakedWallets[j].Staked)
 		//reverse order
@@ -53,9 +53,19 @@ func getValidatorPool() []common.Address {
 	return validatorPool
 }
 
+func (d *Dsg) getInRoundEvs(slot uint64) map[common.Address]bool {
+	evsInRound := make(map[common.Address]bool)
+	stakedWallets := d.getStakedWallets()
+	for _, t := range stakedWallets {
+		evsInRound[t.Address] = true // Todo: only return in-round EVs. Check is Member(slot...)
+	}
+
+	return evsInRound
+}
+
 // Returns a base 1 EV Id, or 0 if not found
-func EVIdFromEtherbase(etherbase common.Address) uint64 {
-	stakedWallets := getStakedWallets()
+func (d *Dsg) EVIdFromEtherbase(etherbase common.Address) uint64 {
+	stakedWallets := d.getStakedWallets()
 
 	for index, stakedWallet := range stakedWallets {
 		if stakedWallet.Address == etherbase {
@@ -67,7 +77,7 @@ func EVIdFromEtherbase(etherbase common.Address) uint64 {
 }
 
 // evid is a base 1 index
-func EtherbaseFromEVId(evid uint64) common.Address {
-	stakedWallets := getStakedWallets()
+func (d *Dsg) EtherbaseFromEVId(evid uint64) common.Address {
+	stakedWallets := d.getStakedWallets()
 	return stakedWallets[evid - 1].Address
 }

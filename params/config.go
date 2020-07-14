@@ -225,9 +225,12 @@ var (
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
-		Clique: &CliqueConfig{
-			Period: 15,
-			Epoch:  30000,
+		Dsg: &DsgConfig{
+			BlockTime:         15,
+			NumSignersInEpoch: 3,
+			NumSignersinRound: 3,
+			BlocksInEpoch:     24,
+			NumberOfRounds:    1,
 		},
 	}
 
@@ -346,6 +349,7 @@ type DsgConfig struct {
 	NumSignersinRound uint64 `json:"roundsize"`  // The number of EVs per round
 	BlocksInEpoch     uint64 `json:"epoch"`      // The number of blocks in an epoch
 	NumberOfRounds    uint64 `json:"round"`      // The number of rounds per epoch
+	BlockTime         uint64 `json:"blocktime"`  // Block time in seconds
 }
 
 // String implements the stringer interface, returning the consensus engine details.

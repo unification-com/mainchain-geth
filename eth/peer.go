@@ -19,8 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/unification-com/mainchain/consensus/dsg"
-	"github.com/unification-com/mainchain/log"
 	"math/big"
 	"sync"
 	"time"
@@ -87,15 +85,12 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	knownTxs    mapset.Set                               // Set of transaction hashes known to be known by this peer
-	knownBlocks mapset.Set                               // Set of block hashes known to be known by this peer
-	queuedTxs   chan []*types.Transaction                // Queue of transactions to broadcast to the peer
-	queuedProps chan *propEvent                          // Queue of blocks to broadcast to the peer
-	queuedAnns  chan *types.Block                        // Queue of blocks to announce to the peer
-	queuedVMs   chan *dsg.ValidationMessage              // Queue of Validation Messages to broadcast to the peer
-	queuedBPs   chan *dsg.BlockProposal                  // Queue of Block Proposals to broadcast to the peer
-	queuedRNBPs chan *dsg.RequestNewBlockProposalMessage // Queue of Request New Block Proposals to broadcast to peers
-	term        chan struct{}                            // Termination channel to stop the broadcaster
+	knownTxs    mapset.Set                // Set of transaction hashes known to be known by this peer
+	knownBlocks mapset.Set                // Set of block hashes known to be known by this peer
+	queuedTxs   chan []*types.Transaction // Queue of transactions to broadcast to the peer
+	queuedProps chan *propEvent           // Queue of blocks to broadcast to the peer
+	queuedAnns  chan *types.Block         // Queue of blocks to announce to the peer
+	term        chan struct{}             // Termination channel to stop the broadcaster
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -109,9 +104,6 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		queuedTxs:   make(chan []*types.Transaction, maxQueuedTxs),
 		queuedProps: make(chan *propEvent, maxQueuedProps),
 		queuedAnns:  make(chan *types.Block, maxQueuedAnns),
-		queuedVMs:   make(chan *dsg.ValidationMessage),
-		queuedBPs:   make(chan *dsg.BlockProposal),
-		queuedRNBPs: make(chan *dsg.RequestNewBlockProposalMessage),
 		term:        make(chan struct{}),
 	}
 }
@@ -139,24 +131,6 @@ func (p *peer) broadcast() {
 				return
 			}
 			p.Log().Trace("Announced block", "number", block.Number(), "hash", block.Hash())
-
-		case blockProposal := <-p.queuedBPs:
-			if err := p.SendNewBlockProposal(blockProposal); err != nil {
-				return
-			}
-			p.Log().Trace("Propagated New Block Proposal")
-
-		case validationMessage := <-p.queuedVMs:
-			if err := p.SendNewValidationMessage(validationMessage); err != nil {
-				return
-			}
-			p.Log().Trace("Propagated Validation Message")
-		case requestNewBlockProposalMessage := <-p.queuedRNBPs:
-			if err := p.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
-				log.Info("error asynchronously sending request new bp message", "err", err)
-				return
-			}
-			p.Log().Trace("Propagated Request New Block Proposal Message")
 
 		case <-p.term:
 			return
@@ -293,21 +267,6 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
 
-// SendNewBlockProposal propagates a DSG Block Proposal over the network.
-func (p *peer) SendNewBlockProposal(blockProposal *dsg.BlockProposal) error {
-	return p2p.Send(p.rw, BlockProposalMsg, blockProposal)
-}
-
-// SendNewValidationMessage propagates a DSG Validation message over the network.
-func (p *peer) SendNewValidationMessage(validationMessage *dsg.ValidationMessage) error {
-	return p2p.Send(p.rw, ValidationMsg, validationMessage)
-}
-
-// SendNewRequestBlockProposalMessage propogates a DSG Request NEw Block Proposal message over the network
-func (p *peer) SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) error {
-	return p2p.Send(p.rw, RequestNewBlockProposalMsg, requestNewBlockProposalMessage)
-}
-
 // AsyncSendNewBlock queues an entire block for propagation to a remote peer. If
 // the peer's broadcast queue is full, the event is silently dropped.
 func (p *peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
@@ -321,6 +280,13 @@ func (p *peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	default:
 		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
 	}
+}
+
+// Send writes an RLP-encoded message with the given code.
+// data should encode as an RLP list.
+// DSG
+func (p *peer) Send(msgcode uint64, data interface{}) error {
+	return p2p.Send(p.rw, msgcode, data)
 }
 
 // SendBlockHeaders sends a batch of block headers to the remote peer.

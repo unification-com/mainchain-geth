@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/unification-com/mainchain/crypto"
 	"math"
 	"math/big"
 	"sync"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/unification-com/mainchain/common"
 	"github.com/unification-com/mainchain/consensus"
-	"github.com/unification-com/mainchain/consensus/dsg"
 	"github.com/unification-com/mainchain/core"
 	"github.com/unification-com/mainchain/core/types"
 	"github.com/unification-com/mainchain/eth/downloader"
@@ -80,16 +80,12 @@ type ProtocolManager struct {
 	fetcher    *fetcher.Fetcher
 	peers      *peerSet
 
-	eventMux                    *event.TypeMux
-	txsCh                       chan core.NewTxsEvent
-	txsSub                      event.Subscription
-	minedBlockSub               *event.TypeMuxSubscription
-	proposalBlockSub            *event.TypeMuxSubscription
-	requestNewBlockProposalSub  *event.TypeMuxSubscription
-	sendNewValidationMessageSub *event.TypeMuxSubscription
+	eventMux      *event.TypeMux
+	txsCh         chan core.NewTxsEvent
+	txsSub        event.Subscription
+	minedBlockSub *event.TypeMuxSubscription
 
 	whitelist map[uint64]common.Hash
-	etherbase common.Address
 
 	// channels for fetcher, syncer, txsyncLoop
 	newPeerCh   chan *peer
@@ -100,11 +96,13 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
+
+	engine consensus.Engine
 }
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCheckpoint, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cacheLimit int, whitelist map[uint64]common.Hash, etherbase common.Address) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCheckpoint, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cacheLimit int, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkID:   networkID,
@@ -117,8 +115,13 @@ func NewProtocolManager(config *params.ChainConfig, checkpoint *params.TrustedCh
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
-		etherbase:   etherbase,
+		engine:      engine,
 	}
+
+	if handler, ok := engine.(consensus.DsgMsgHandler); ok {
+		handler.SetProtocolManager(manager)
+	}
+
 	if mode == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
 		// block is ahead, so fast sync was enabled for this node at a certain point.
@@ -257,13 +260,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
-	pm.proposalBlockSub = pm.eventMux.Subscribe(core.NewBlockProposalEvent{})
-	pm.requestNewBlockProposalSub = pm.eventMux.Subscribe(core.RequestNewBlockProposalMessage{})
-	pm.sendNewValidationMessageSub = pm.eventMux.Subscribe(core.SendNewValidationMessageEvent{})
 	go pm.minedBroadcastLoop()
-	go pm.proposedBroadcastLoop()
-	go pm.requestNewBlockProposalLoop()
-	go pm.sendNewValidationMessageLoop()
 
 	// start sync handlers
 	go pm.syncer()
@@ -385,105 +382,20 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
+	if handler, ok := pm.engine.(consensus.DsgMsgHandler); ok {
+		pubKey := p.Node().Pubkey()
+		addr := crypto.PubkeyToAddress(*pubKey)
+		handled, err := handler.HandleMsg(addr, msg)
+		if handled {
+			return err
+		}
+	}
+
 	// Handle the message depending on its contents
 	switch {
 	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
-
-	case msg.Code == ValidationMsg:
-		// Validation Message indicates whether the peers agree with the BP or not
-		var validationMessage dsg.ValidationMessage
-		if err := msg.Decode(&validationMessage); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-
-		log.Info("Validation Result:", "block", validationMessage.Number, "proposer", validationMessage.Proposer, "validator", validationMessage.Verifier, "authorise", validationMessage.Authorize)
-
-		cache := pm.blockchain.GetDSGCache()
-
-		numInvalids := cache.GetInvalidCounter()
-		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
-		if !dsg.Member(slot, validationMessage.Verifier) {
-			log.Info("discarding validation message from invalid EV", "slot", slot, "ev", validationMessage.Verifier)
-			return nil
-		}
-
-		result := cache.InsertValidationMessage(validationMessage)
-
-		evid := dsg.EVIdFromEtherbase(pm.etherbase)
-		if result == dsg.Accept && evid == dsg.EVIdFromEtherbase(validationMessage.Proposer) {
-			log.Info("Accepting block", "Block Number", validationMessage.Number, "Proposer", validationMessage.Proposer)
-			blockProposal, err := cache.GetBlockProposal(validationMessage.Number, validationMessage.Proposer)
-			if err != nil {
-				log.Error("Block Proposal not found in cache", "err", err)
-				return nil
-			}
-			go pm.eventMux.Post(core.BlockVerifiedEvent{BlockProposal: &blockProposal})
-		}
-		if result == dsg.Accept {
-			go pm.eventMux.Post(core.ValidationResultEvent{Valid: true})
-		}
-		if result == dsg.Reject {
-			go pm.eventMux.Post(core.ValidationResultEvent{Valid: false})
-			cache.IncrementInvalidCounter()
-			rbp := dsg.RequestNewBlockProposalMessage{
-				Number:    validationMessage.Number,
-				Verifier:  pm.etherbase,
-				Signature: common.Hash{},
-			}
-			log.Info("request new block proposal - reject invalid BP", "num", rbp.Number, "proposer", validationMessage.Proposer)
-			go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &rbp})
-			go pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
-		}
-
-	case msg.Code == BlockProposalMsg:
-		// A new block has been proposed
-
-		var proposal dsg.BlockProposal
-		if err := msg.Decode(&proposal); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		cache := pm.blockchain.GetDSGCache()
-
-		numInvalids := cache.GetInvalidCounter()
-		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
-		if !dsg.Member(slot, proposal.Proposer) {
-			log.Info("discarding block proposal message from invalid EV", "slot", slot, "ev", proposal.Proposer)
-			return nil
-		}
-
-		// cache BP
-		cache.InsertBlockProposal(proposal)
-		parentHeader := pm.blockchain.CurrentHeader()
-		valid := proposal.ValidateBlockProposal(parentHeader, cache)
-		log.Info("BlockProposal Received", "num", proposal.Number, "proposer", proposal.Proposer, "valid", valid)
-
-		go pm.eventMux.Post(core.NewBlockProposalFoundEvent{valid})
-
-		vm := dsg.ValidationMessage{Number: proposal.Number, BlockHash: proposal.BlockHash, Verifier:pm.etherbase, Proposer: proposal.Proposer, Signature: common.Hash{}, Authorize:valid}
-
-		// cache own validation message
-		cache.InsertValidationMessage(vm)
-		go pm.eventMux.Post(core.SendNewValidationMessageEvent{ValidationMessage: &vm})
-
-
-	case msg.Code == RequestNewBlockProposalMsg:
-		var requestProposal dsg.RequestNewBlockProposalMessage
-		if err := msg.Decode(&requestProposal); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		cache := pm.blockchain.GetDSGCache()
-
-		numInvalids := cache.GetInvalidCounter()
-		slot := pm.blockchain.CurrentHeader().SlotCount + 1 + numInvalids
-		if !dsg.Member(slot, requestProposal.Verifier) {
-			log.Info("discarding request new block proposal message from invalid EV", "slot", slot, "ev", requestProposal.Verifier)
-			return nil
-		}
-		log.Info("A new block proposal has been requested", "num", requestProposal.Number, "from", requestProposal.Verifier)
-
-		go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &requestProposal})
 
 	// Block header query, collect the requested headers and reply
 	case msg.Code == GetBlockHeadersMsg:
@@ -796,26 +708,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		request.Block.ReceivedAt = msg.ReceivedAt
 		request.Block.ReceivedFrom = p
 
-		valid := dsg.ValidateNewBlock(request.Block)
-		if valid == false {
-			rbp := dsg.RequestNewBlockProposalMessage{
-				Number:    request.Block.Number(),
-				Verifier:  pm.etherbase,
-				Signature: common.Hash{},
-			}
-			log.Info("request new block proposal because the received NewBlock is invalid", "num", rbp.Number)
-			// cache own ReqNewBP
-			go pm.eventMux.Post(core.RequestNewBlockProposalEvent{ RequestNewBlockProposalMessage: &rbp})
-			go pm.eventMux.Post(core.RequestNewBlockProposalMessage{RequestNewBlockProposalMessage: &rbp})
-
-			return nil
-		}
-
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
 		pm.fetcher.Enqueue(p.id, request.Block)
-
-		go pm.eventMux.Post(core.NewBlockValidatedEvent{})
 
 		// Assuming the block is importable by the peer, but possibly not yet done so,
 		// calculate the head hash and TD that the peer truly must have.
@@ -859,72 +754,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	return nil
-}
-
-// Synchronously broadcast a BlockProposal to all peers
-func (pm *ProtocolManager) BroadcastBlockProposal(blockProposal *dsg.BlockProposal) {
-	log.Info("Broadcasting Block Proposal")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		if err := peer.SendNewBlockProposal(blockProposal); err != nil {
-			log.Info("Error broadcasting block proposal")
-		}
-	}
-}
-
-// Asynchronously broadcast a BlockProposal to all peers
-func (pm *ProtocolManager) AsyncBroadcastBlockProposal(blockProposal *dsg.BlockProposal) {
-	log.Info("Asynchronously Broadcasting Block Proposal")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		peer.queuedBPs <- blockProposal
-	}
-}
-
-// Synchronously broadcast a ValidationMessage to all peers
-func (pm *ProtocolManager) BroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
-	log.Info("Broadcasting validation message")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		if err := peer.SendNewValidationMessage(validationMessage); err != nil {
-			log.Info("Error broadcasting validation message")
-		}
-	}
-}
-
-// Asynchronously broadcast a Validation Message to all peers
-func (pm *ProtocolManager) AsyncBroadcastValidationMessage(validationMessage *dsg.ValidationMessage) {
-	log.Info("Asynchronously Broadcasting Validation Message")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		peer.queuedVMs <- validationMessage
-	}
-}
-
-// Asynchronously broadcast a RequestNewBlockProposalMessage to all peers
-func (pm *ProtocolManager) AsyncBroadcastRequestNewBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) {
-	log.Info("Asynchronously Broadcasting Request New Block Proposal Message")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		peer.queuedRNBPs <- requestNewBlockProposalMessage
-	}
-}
-
-// Synchronously broadcast a requestNewBlockProposalMessage to all peers
-func (pm *ProtocolManager) BroadcastNewBlockProposalMessage(requestNewBlockProposalMessage *dsg.RequestNewBlockProposalMessage) {
-	log.Info("Broadcasting Request New Block Proposal Message")
-
-	peers := pm.peers.peers
-	for _, peer := range peers {
-		if err := peer.SendNewRequestBlockProposalMessage(requestNewBlockProposalMessage); err != nil {
-			log.Info("Error broadcasting Request New Block Proposal message")
-		}
-	}
 }
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
@@ -997,32 +826,6 @@ func (pm *ProtocolManager) minedBroadcastLoop() {
 	}
 }
 
-// Block proposal broadcast loop
-func (pm *ProtocolManager) proposedBroadcastLoop() {
-	for obj := range pm.proposalBlockSub.Chan() {
-		if ev, ok := obj.Data.(core.NewBlockProposalEvent); ok {
-			pm.AsyncBroadcastBlockProposal(ev.BlockProposal)
-		}
-	}
-}
-
-// Request new BP broadcast loop
-func (pm *ProtocolManager) requestNewBlockProposalLoop() {
-	for obj := range pm.requestNewBlockProposalSub.Chan() {
-		if ev, ok := obj.Data.(core.RequestNewBlockProposalMessage); ok {
-			pm.AsyncBroadcastRequestNewBlockProposalMessage(ev.RequestNewBlockProposalMessage)
-		}
-	}
-}
-
-func (pm *ProtocolManager) sendNewValidationMessageLoop() {
-	for obj := range pm.sendNewValidationMessageSub.Chan() {
-		if ev, ok := obj.Data.(core.SendNewValidationMessageEvent); ok {
-			pm.AsyncBroadcastValidationMessage(ev.ValidationMessage)
-		}
-	}
-}
-
 func (pm *ProtocolManager) txBroadcastLoop() {
 	for {
 		select {
@@ -1056,4 +859,22 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+// FindPeers finds a set of peers for the given addresses
+// DSG
+func (self *ProtocolManager) FindPeers(targets map[common.Address]bool) map[common.Address]consensus.Peer {
+	m := make(map[common.Address]consensus.Peer)
+	for _, p := range self.peers.peers {
+		pubKey := p.Node().Pubkey()
+		addr := crypto.PubkeyToAddress(*pubKey)
+		// Todo - find some way of linking up nodeKey addr to EV coinbase address, e.g. when peer registers, sends a signed message
+		//log.Info("FindPeers", "id", p.ID(), "peeraddr", addr.String(), "node.id", p.Node().ID(), "node.ip", p.Node().IP())
+		// enable when above is solved
+		//if targets[addr] {
+		//	m[addr] = p
+		//}
+		m[addr] = p // just send back list of all peers for now
+	}
+	return m
 }
